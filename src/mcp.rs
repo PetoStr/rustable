@@ -4,8 +4,8 @@ use std::convert::TryInto;
 use std::io;
 use std::io::prelude::*;
 
-const GREETING_BIG_ENDIAN: u64 = 0x5a7e006600000000;
-const GREETING_LITTLE_ENDIAN: u64 = 0x0000000066007e5a;
+const GREETING_NATIVE_BYTE_ORDER: u64 = 0x0000000066007e5a;
+const GREETING_REVERSED_BYTE_ORDER: u64 = 0x5a7e006600000000;
 
 const MEDUSA_COMM_AUTHREQUEST: u32 = 0x01;
 const MEDUSA_COMM_KCLASSDEF: u32 = 0x02;
@@ -437,13 +437,12 @@ impl<T: Read + Write> Connection<T> {
         let greeting = channel.read_u64()?;
         println!("greeting = 0x{:016x}", greeting);
 
-        // TODO this is not the valid way to determine correct endianness
-        if greeting == GREETING_BIG_ENDIAN {
-            unimplemented!("big endian");
-        } else if greeting == GREETING_LITTLE_ENDIAN {
-            println!("little endian");
+        if greeting == GREETING_NATIVE_BYTE_ORDER {
+            println!("native byte order");
+        } else if greeting == GREETING_REVERSED_BYTE_ORDER {
+            unimplemented!("reversed byte order");
         } else {
-            println!("unknown endian");
+            panic!("unknown byte order");
         }
         println!();
 
