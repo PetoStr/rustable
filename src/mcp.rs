@@ -436,7 +436,6 @@ impl<T: Read + Write> Connection<T> {
 
         let greeting = channel.read_u64()?;
         println!("greeting = 0x{:016x}", greeting);
-
         if greeting == GREETING_NATIVE_BYTE_ORDER {
             println!("native byte order");
         } else if greeting == GREETING_REVERSED_BYTE_ORDER {
@@ -444,6 +443,10 @@ impl<T: Read + Write> Connection<T> {
         } else {
             panic!("unknown byte order");
         }
+
+        let version = channel.read_u64()?;
+        println!("protocol version {}", version);
+
         println!();
 
         Ok(Self {
