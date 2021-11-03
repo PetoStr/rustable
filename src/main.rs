@@ -1,6 +1,6 @@
-use rustable::mcp::AuthRequestData;
-use rustable::mcp::Connection;
-use rustable::mcp::MedusaAnswer;
+use rustable::medusa::mcp::Connection;
+use rustable::medusa::AuthRequestData;
+use rustable::medusa::MedusaAnswer;
 use std::fs::OpenOptions;
 
 const MEDUSA_FILE_NAME: &str = "/dev/medusa";

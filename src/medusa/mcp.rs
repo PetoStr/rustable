@@ -1,38 +1,10 @@
 use crate::cstr_to_string;
+use crate::medusa::parser;
+use crate::medusa::*;
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::io;
 use std::io::prelude::*;
-
-const GREETING_NATIVE_BYTE_ORDER: u64 = 0x0000000066007e5a;
-const GREETING_REVERSED_BYTE_ORDER: u64 = 0x5a7e006600000000;
-
-const MEDUSA_COMM_AUTHREQUEST: u32 = 0x01;
-const MEDUSA_COMM_KCLASSDEF: u32 = 0x02;
-const MEDUSA_COMM_KCLASSUNDEF: u32 = 0x03;
-const MEDUSA_COMM_EVTYPEDEF: u32 = 0x04;
-const MEDUSA_COMM_EVTYPEUNDEF: u32 = 0x05;
-const MEDUSA_COMM_FETCH_ANSWER: u32 = 0x08;
-const MEDUSA_COMM_FETCH_ERROR: u32 = 0x09;
-const MEDUSA_COMM_UPDATE_ANSWER: u32 = 0x0a;
-
-#[allow(dead_code)]
-const MEDUSA_COMM_FETCH_REQUEST: u64 = 0x88;
-const MEDUSA_COMM_UPDATE_REQUEST: u64 = 0x8a;
-const MEDUSA_COMM_AUTHANSWER: u64 = 0x81;
-
-const MEDUSA_COMM_KCLASSNAME_MAX: usize = 32 - 2;
-const MEDUSA_COMM_ATTRNAME_MAX: usize = 32 - 5;
-const MEDUSA_COMM_EVNAME_MAX: usize = 32 - 2;
-
-const MED_COMM_TYPE_END: u8 = 0x00;
-const _MED_COMM_TYPE_UNSIGNED: u8 = 0x01;
-const _MED_COMM_TYPE_SIGNED: u8 = 0x02;
-const _MED_COMM_TYPE_STRING: u8 = 0x03;
-const _MED_COMM_TYPE_BITMAP: u8 = 0x04;
-const _MED_COMM_TYPE_BYTES: u8 = 0x05;
-
-type Command = u32;
+use std::mem;
 
 lazy_static! {
     static ref COMMS: HashMap<Command, &'static str> = {
@@ -49,214 +21,8 @@ lazy_static! {
     };
 }
 
-// TODO refactor these weird names
-#[derive(Default, Clone)]
-pub struct MedusaCommKClassHeader {
-    kclassid: u64,
-    size: i16,
-    name: [u8; MEDUSA_COMM_KCLASSNAME_MAX],
-}
-
-impl MedusaCommKClassHeader {
-    fn name(&self) -> String {
-        cstr_to_string(&self.name)
-    }
-}
-
-#[derive(Default, Clone)]
-pub struct MedusaCommKClass {
-    header: MedusaCommKClassHeader,
-    attributes: Vec<MedusaCommAttribute>,
-}
-
-impl MedusaCommKClass {
-    fn set_attribute(&mut self, attr_name: &str, data: Vec<u8>) {
-        let name = self.header.name();
-        let mut attr = self
-            .attributes
-            .iter_mut()
-            .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does
-            .unwrap_or_else(|| panic!("{} has no attribute {}", name, attr_name));
-
-        attr.data = data;
-    }
-
-    fn _get_attribute(&mut self, attr_name: &str) -> &[u8] {
-        let name = self.header.name();
-        let attr = self
-            .attributes
-            .iter()
-            .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does
-            .unwrap_or_else(|| panic!("{} has no attribute {}", name, attr_name));
-
-        &attr.data
-    }
-
-    fn pack_attributes(&self) -> Vec<u8> {
-        let mut res = vec![0; self.header.size as usize];
-
-        for attribute in &self.attributes {
-            let data = attribute.pack_data();
-
-            // TODO make faster, `slice::copy_from_slice()` did not work
-            for i in 0..attribute.header.length as usize {
-                res[attribute.header.offset as usize + i] = data[i];
-            }
-        }
-
-        res
-    }
-}
-
-#[derive(Default, Clone)]
-pub struct MedusaCommAttributeHeader {
-    offset: i16,
-    length: i16, // size in bytes
-    r#type: u8, // i think this should be u8 and not i8 because of bit masks
-    name: [u8; MEDUSA_COMM_ATTRNAME_MAX],
-}
-
-impl MedusaCommAttributeHeader {
-    fn name(&self) -> String {
-        cstr_to_string(&self.name)
-    }
-}
-
-#[derive(Default, Clone)]
-pub struct MedusaCommAttribute {
-    header: MedusaCommAttributeHeader,
-    data: Vec<u8>,
-}
-
-impl MedusaCommAttribute {
-    fn pack_data(&self) -> Vec<u8> {
-        self.data
-            .iter()
-            .copied()
-            .chain(std::iter::once(0).cycle())
-            .take(self.header.length as usize)
-            .collect()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-#[repr(packed)]
-pub struct MedusaCommEvtype {
-    evid: u64,
-    size: u16,
-    actbit: u16,
-    //ev_kclass: [u64; 2],
-    ev_sub: u64,
-    ev_obj: u64,
-    name: [u8; MEDUSA_COMM_EVNAME_MAX],
-    ev_name: [[u8; MEDUSA_COMM_ATTRNAME_MAX]; 2],
-    // TODO attributes
-}
-
-impl MedusaCommEvtype {
-    fn name(&self) -> String {
-        cstr_to_string(&self.name)
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum RequestType {
-    Fetch,
-    Update,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct MedusaCommRequest<'a> {
-    req_type: RequestType,
-    kclassid: u64,
-    id: u64,
-    data: &'a [u8],
-}
-
-impl<'a> MedusaCommRequest<'_> {
-    // TODO big endian - check rust core to_le_bytes() implementation
-    // consider chaning the function name
-    fn as_bytes(&self) -> Vec<u8> {
-        let update_b = match self.req_type {
-            RequestType::Fetch => MEDUSA_COMM_FETCH_REQUEST.to_le_bytes(),
-            RequestType::Update => MEDUSA_COMM_UPDATE_REQUEST.to_le_bytes(),
-        };
-        let kclassid_b = self.kclassid.to_le_bytes();
-        let id_b = self.id.to_le_bytes();
-        update_b
-            .iter()
-            .copied()
-            .chain(kclassid_b.iter().copied())
-            .chain(id_b.iter().copied())
-            .chain(self.data.iter().copied())
-            .collect::<Vec<u8>>()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-#[repr(packed)]
-pub struct DecisionAnswer {
-    request_id: u64,
-    result: u16,
-}
-
-impl DecisionAnswer {
-    // TODO big endian
-    // TODO as_bytes adds additional data -> change name?
-    fn as_bytes(&self) -> [u8; 8 + std::mem::size_of::<Self>()] {
-        let answer_b = MEDUSA_COMM_AUTHANSWER.to_le_bytes();
-        let request_b = self.request_id.to_le_bytes();
-        let result_b = self.result.to_le_bytes();
-        answer_b
-            .iter()
-            .copied()
-            .chain(request_b.iter().copied())
-            .chain(result_b.iter().copied())
-            .collect::<Vec<u8>>()
-            .try_into()
-            .unwrap()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-#[repr(packed)]
-struct UpdateAnswer {
-    kclassid: u64,
-    msg_seq: u64,
-    ans_res: i32,
-}
-
-#[derive(Clone, Debug)]
-struct FetchAnswer {
-    kclassid: u64,
-    msg_seq: u64,
-    data: Vec<u8>,
-}
-
-#[repr(u16)]
-pub enum MedusaAnswer {
-    Err = u16::MAX,
-    Yes = 0,
-    No,
-    Skip,
-    Ok,
-}
-
-#[derive(Clone)]
-pub struct AuthRequestData {
-    // TODO
-    pub request_id: u64,
-    pub event: String,
-    pub subject: u64,
-    //pub object: MedusaCommKClass,
-}
-
-// TODO just use nom library
 trait Channel {
     fn read_u64(&mut self) -> io::Result<u64>;
-    fn read_u32(&mut self) -> io::Result<u32>;
-    fn read_i16(&mut self) -> io::Result<i16>;
-    fn read_u8(&mut self) -> io::Result<u8>;
     fn read_kclass(&mut self) -> io::Result<MedusaCommKClass>;
     fn read_kevtype(&mut self) -> io::Result<MedusaCommEvtype>;
     fn read_kattr_header(&mut self) -> io::Result<MedusaCommAttributeHeader>;
@@ -298,74 +64,40 @@ impl<T: io::Write> io::Write for NativeEndianChannel<T> {
 
 impl<T: io::Read + io::Write> Channel for NativeEndianChannel<T> {
     fn read_u64(&mut self) -> io::Result<u64> {
-        let mut buff = [0; 8];
-        self.handle.read_exact(&mut buff)?;
-        Ok(u64::from_ne_bytes(buff))
-    }
-
-    fn read_u32(&mut self) -> io::Result<u32> {
-        let mut buff = [0; 4];
-        self.handle.read_exact(&mut buff)?;
-        Ok(u32::from_ne_bytes(buff))
-    }
-
-    fn read_i16(&mut self) -> io::Result<i16> {
-        let mut buff = [0; 2];
-        self.handle.read_exact(&mut buff)?;
-        Ok(i16::from_ne_bytes(buff))
-    }
-
-    fn read_u8(&mut self) -> io::Result<u8> {
-        let mut buff = [0; 1];
-        self.handle.read_exact(&mut buff)?;
-        Ok(u8::from_ne_bytes(buff))
+        let mut buf = [0; 8];
+        self.handle.read_exact(&mut buf)?;
+        Ok(u64::from_ne_bytes(buf))
     }
 
     fn read_command(&mut self) -> io::Result<Command> {
-        let mut buff = [0; 4];
-        self.handle.read_exact(&mut buff)?;
-        Ok(u32::from_ne_bytes([buff[0], buff[1], buff[2], buff[3]]))
+        let mut buf = [0; mem::size_of::<Command>()];
+        self.handle.read_exact(&mut buf)?;
+        let (_, cmd) = parser::parse_command(&buf).unwrap();
+        Ok(cmd)
     }
 
     fn read_kclass(&mut self) -> io::Result<MedusaCommKClass> {
-        let kclassid = self.read_u64()?;
-        let size = self.read_i16()?;
-
-        let mut name = [0; MEDUSA_COMM_KCLASSNAME_MAX];
-        self.handle.read_exact(&mut name)?;
-
+        let mut buf = [0; mem::size_of::<MedusaCommKClassHeader>()];
+        self.handle.read_exact(&mut buf)?;
+        let (_, header) = parser::parse_kclass_header(&buf).unwrap();
         Ok(MedusaCommKClass {
-            header: MedusaCommKClassHeader {
-                kclassid,
-                size,
-                name,
-            },
+            header,
             ..Default::default()
         })
     }
 
     fn read_kevtype(&mut self) -> io::Result<MedusaCommEvtype> {
-        let mut kevtype_bytes = [0; std::mem::size_of::<MedusaCommEvtype>()];
-        self.handle.read_exact(&mut kevtype_bytes)?;
-
-        // unsafe with mixed endianness between the server and the module
-        Ok(unsafe { std::mem::transmute(kevtype_bytes) })
+        let mut buf = [0; std::mem::size_of::<MedusaCommEvtype>()];
+        self.handle.read_exact(&mut buf)?;
+        let (_, kevtype) = parser::parse_kevtype(&buf).unwrap();
+        Ok(kevtype)
     }
 
     fn read_kattr_header(&mut self) -> io::Result<MedusaCommAttributeHeader> {
-        let offset = self.read_i16()?;
-        let length = self.read_i16()?;
-        let r#type = self.read_u8()?;
-
-        let mut name = [0; MEDUSA_COMM_ATTRNAME_MAX];
-        self.handle.read_exact(&mut name)?;
-
-        Ok(MedusaCommAttributeHeader {
-            offset,
-            length,
-            r#type,
-            name,
-        })
+        let mut buf = [0; mem::size_of::<MedusaCommAttributeHeader>()];
+        self.handle.read_exact(&mut buf)?;
+        let (_, kattr_header) = parser::parse_kattr_header(&buf).unwrap();
+        Ok(kattr_header)
     }
 
     fn read_kattrs(&mut self) -> io::Result<Vec<MedusaCommAttribute>> {
@@ -388,32 +120,31 @@ impl<T: io::Read + io::Write> Channel for NativeEndianChannel<T> {
     }
 
     fn read_update_answer(&mut self) -> io::Result<UpdateAnswer> {
-        let mut bytes = [0; std::mem::size_of::<UpdateAnswer>()];
-        self.handle.read_exact(&mut bytes)?;
-
-        // unsafe with mixed endianness between the server and the module
-        Ok(unsafe { std::mem::transmute(bytes) })
+        let mut buf = [0; std::mem::size_of::<UpdateAnswer>()];
+        self.handle.read_exact(&mut buf)?;
+        let (_, update_answer) = parser::parse_update_answer(&buf).unwrap();
+        Ok(update_answer)
     }
 
     fn read_fetch_answer(
         &mut self,
         classes: &HashMap<u64, MedusaCommKClass>,
     ) -> io::Result<FetchAnswer> {
-        let kclassid = self.read_u64()?;
-        let msg_seq = self.read_u64()?;
+        let mut buf = [0; 2 * mem::size_of::<u64>()];
+        self.handle.read_exact(&mut buf)?;
+        let (_, (kclassid, msg_seq)) = parser::parse_fetch_answer_stage0(&buf).unwrap();
 
         let class = classes
             .get(&kclassid)
             .unwrap_or_else(|| panic!("Unknown class with id {:x}", kclassid));
+        let data_len = class.header.size as usize;
 
-        let mut data = vec![0; class.header.size as usize];
-        self.handle.read_exact(&mut data)?;
+        let mut buf = vec![0; data_len];
+        self.handle.read_exact(&mut buf)?;
+        let (_, fetch_answer) =
+            parser::parse_fetch_answer_stage1(&buf, (kclassid, msg_seq), data_len).unwrap();
 
-        Ok(FetchAnswer {
-            kclassid,
-            msg_seq,
-            data,
-        })
+        Ok(fetch_answer)
     }
 }
 
@@ -540,9 +271,9 @@ impl<T: Read + Write> Connection<T> {
         println!("acctype.size = {}", { acctype.size });
 
         let evbuf = if acctype.size > 8 {
-            let mut buff = vec![0; acctype.size as usize - 8];
-            self.channel.read_exact(&mut buff)?;
-            buff
+            let mut buf = vec![0; acctype.size as usize - 8];
+            self.channel.read_exact(&mut buf)?;
+            buf
         } else {
             vec![]
         };
