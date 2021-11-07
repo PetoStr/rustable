@@ -2,6 +2,7 @@ use crate::cstr_to_string;
 
 pub mod mcp;
 pub mod parser;
+pub mod writer;
 
 type Command = u32;
 
