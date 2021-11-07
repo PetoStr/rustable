@@ -227,6 +227,7 @@ impl<T: Read + Write> Connection<T> {
 
                 if auth_data.event == "getfile" || auth_data.event == "getprocess" {
                     let subject = self.classes.get_mut(&auth_data.subject).unwrap();
+                    println!("vs = {:?}", subject.get_attribute("vs"));
                     if auth_data.event == "getfile" {
                         //subject.set_attribute("med_oact", vec![0xff, 0xff]);
                         subject.set_attribute("med_oact", vec![]);

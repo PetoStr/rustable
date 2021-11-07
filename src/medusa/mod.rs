@@ -65,7 +65,7 @@ impl MedusaCommKClass {
         attr.data = data;
     }
 
-    fn _get_attribute(&mut self, attr_name: &str) -> &[u8] {
+    fn get_attribute(&mut self, attr_name: &str) -> &[u8] {
         let name = self.header.name();
         let attr = self
             .attributes
