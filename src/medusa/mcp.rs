@@ -136,6 +136,7 @@ impl<T: io::Read> ReadChannel for NativeByteOrderChannel<T> {
 pub struct SharedContext {
     // TODO using this map seems to be very slow
     pub classes: Arc<Mutex<HashMap<u64, MedusaClass>>>,
+    pub evtypes: Arc<Mutex<HashMap<u64, MedusaEvtype>>>,
 
     sender: Sender<Arc<[u8]>>,
     request_id_cn: Arc<AtomicU64>,
@@ -145,6 +146,7 @@ impl SharedContext {
     fn new(sender: Sender<Arc<[u8]>>) -> Self {
         Self {
             classes: Arc::new(Mutex::new(HashMap::new())),
+            evtypes: Arc::new(Mutex::new(HashMap::new())),
             sender,
             request_id_cn: Arc::new(AtomicU64::new(111)),
         }
@@ -186,8 +188,6 @@ pub struct Connection<R: Read> {
 
     context: SharedContext,
     class_id: HashMap<String, u64>,
-
-    evtypes: HashMap<u64, MedusaEvtype>,
 }
 
 impl<R: Read> Connection<R> {
@@ -220,7 +220,6 @@ impl<R: Read> Connection<R> {
             pool: Some(pool),
             context,
             class_id: HashMap::new(),
-            evtypes: HashMap::new(),
         })
     }
 
@@ -289,7 +288,8 @@ impl<R: Read> Connection<R> {
     fn acquire_auth_req_data(&mut self, id: u64) -> io::Result<AuthRequestData> {
         println!("Medusa auth request, id = 0x{:x}", id);
 
-        let acctype = self.evtypes.get(&id).expect("Unknown access type");
+        let evtypes = self.context.evtypes.lock().unwrap();
+        let acctype = evtypes.get(&id).expect("Unknown access type");
         println!("acctype name = {}", acctype.name());
 
         let request_id = self.channel.read_u64()?;
@@ -298,7 +298,7 @@ impl<R: Read> Connection<R> {
         let evid = self.channel.read_u64()?;
         println!("evid = 0x{:x}", evid);
 
-        let evtype = self.evtypes.get(&evid).expect("Unknown event type");
+        let evtype = evtypes.get(&evid).expect("Unknown event type");
         println!("evtype name = {}", evtype.name());
 
         println!("acctype.size = {}", { acctype.size });
@@ -415,7 +415,11 @@ impl<R: Read> Connection<R> {
         println!();
 
         println!("evid = 0x{:x}", { evtype.evid });
-        self.evtypes.insert(evtype.evid, evtype);
+        self.context
+            .evtypes
+            .lock()
+            .unwrap()
+            .insert(evtype.evid, evtype);
 
         Ok(())
     }
