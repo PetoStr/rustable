@@ -9,6 +9,7 @@ use std::io;
 use std::io::prelude::*;
 use std::mem;
 use std::sync::Arc;
+use threadfin::ThreadPool;
 
 lazy_static! {
     static ref COMMS: HashMap<Command, &'static str> = {
@@ -121,9 +122,9 @@ struct NativeByteOrderChannel<R: Read> {
 }
 
 impl<R: Read> NativeByteOrderChannel<R> {
-    fn new<W: Write + 'static + Send>(write_handle: W, read_handle: R) -> Self {
+    fn new<W: Write + 'static + Send>(pool: &ThreadPool, write_handle: W, read_handle: R) -> Self {
         let (sender, receiver) = unbounded();
-        let write_worker = WriteWorker::new(write_handle, receiver);
+        let write_worker = WriteWorker::new(pool, write_handle, receiver);
         Self {
             read_handle,
             sender,
@@ -140,8 +141,8 @@ impl<R: Read> NativeByteOrderChannel<R> {
 
 impl<R: Read> Drop for NativeByteOrderChannel<R> {
     fn drop(&mut self) {
-        if let Some(thread) = self.write_worker.thread.take() {
-            thread.join().unwrap();
+        if let Some(task) = self.write_worker.task.take() {
+            task.join();
         }
     }
 }
@@ -157,6 +158,8 @@ pub struct Connection<R: Read> {
     // channel: Box<dyn Channel<T>>,
     channel: NativeByteOrderChannel<R>,
 
+    pool: Option<ThreadPool>,
+
     classes: HashMap<u64, MedusaCommKClass>,
     class_id: HashMap<String, u64>,
 
@@ -167,7 +170,8 @@ pub struct Connection<R: Read> {
 
 impl<R: Read> Connection<R> {
     pub fn new<W: Write + 'static + Send>(write_handle: W, read_handle: R) -> io::Result<Self> {
-        let mut channel = NativeByteOrderChannel::new(write_handle, read_handle);
+        let pool = ThreadPool::builder().size(threadfin::PerCore(2)).build();
+        let mut channel = NativeByteOrderChannel::new(&pool, write_handle, read_handle);
 
         let greeting = channel.read_u64()?;
         println!("greeting = 0x{:016x}", greeting);
@@ -186,6 +190,7 @@ impl<R: Read> Connection<R> {
 
         Ok(Self {
             channel,
+            pool: Some(pool),
             classes: HashMap::new(),
             class_id: HashMap::new(),
             evtypes: HashMap::new(),
@@ -197,6 +202,7 @@ impl<R: Read> Connection<R> {
     pub fn poll_loop<F>(&mut self, auth_cb: F) -> io::Result<()>
     where
         F: Fn(AuthRequestData) -> MedusaAnswer,
+        F: Clone + Send + 'static,
     {
         loop {
             let id = self.channel.read_u64()?;
@@ -227,7 +233,6 @@ impl<R: Read> Connection<R> {
                 }
             } else {
                 let auth_data = self.acquire_auth_req_data(id)?;
-                let request_id = auth_data.request_id;
 
                 if auth_data.event == "getfile" || auth_data.event == "getprocess" {
                     let subject = self.classes.get_mut(&auth_data.subject).unwrap();
@@ -248,14 +253,29 @@ impl<R: Read> Connection<R> {
                     self.update_object(auth_data.subject, &packed_attrs);
                 }
 
-                let result = auth_cb(auth_data) as u16;
-
-                let decision = DecisionAnswer { request_id, result };
-                self.channel.write_all(&decision.as_bytes());
+                self.execute_auth_task(auth_cb.clone(), auth_data);
             }
 
             println!();
         }
+    }
+
+    fn execute_auth_task<F>(&mut self, auth_cb: F, auth_data: AuthRequestData)
+        where F: Fn(AuthRequestData) -> MedusaAnswer,
+              F: Send + 'static,
+    {
+        let sender = self.channel.sender.clone();
+        self
+            .pool
+            .as_ref()
+            .expect("Thread pool is not active")
+            .execute(move || {
+                let request_id = auth_data.request_id;
+                let result = auth_cb(auth_data) as u16;
+
+                let decision = DecisionAnswer { request_id, result };
+                sender.send(Arc::from(decision.as_bytes())).expect("channel is disconnected");
+            });
     }
 
     fn acquire_auth_req_data(&mut self, id: u64) -> io::Result<AuthRequestData> {
@@ -427,5 +447,13 @@ impl<R: Read> Connection<R> {
     #[allow(dead_code)]
     fn fetch_object(&mut self, kclassid: u64, data: &[u8]) {
         self.request_object(RequestType::Fetch, kclassid, data);
+    }
+}
+
+impl<R: Read> Drop for Connection<R> {
+    fn drop(&mut self) {
+        if let Some(pool) = self.pool.take() {
+            pool.join();
+        }
     }
 }
