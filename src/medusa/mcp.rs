@@ -43,41 +43,41 @@ trait ReadChannel {
         Ok(cmd)
     }
 
-    fn read_kclass(&mut self) -> io::Result<MedusaCommKClass> {
-        let mut buf = [0; mem::size_of::<MedusaCommKClassHeader>()];
+    fn read_class(&mut self) -> io::Result<MedusaClass> {
+        let mut buf = [0; mem::size_of::<MedusaClassHeader>()];
         self.read_exact(&mut buf)?;
-        let (_, header) = parser::parse_kclass_header(&buf).unwrap();
-        Ok(MedusaCommKClass {
+        let (_, header) = parser::parse_class_header(&buf).unwrap();
+        Ok(MedusaClass {
             header,
             ..Default::default()
         })
     }
 
-    fn read_kevtype(&mut self) -> io::Result<MedusaCommEvtype> {
-        let mut buf = [0; std::mem::size_of::<MedusaCommEvtype>()];
+    fn read_evtype(&mut self) -> io::Result<MedusaEvtype> {
+        let mut buf = [0; std::mem::size_of::<MedusaEvtype>()];
         self.read_exact(&mut buf)?;
-        let (_, kevtype) = parser::parse_kevtype(&buf).unwrap();
-        Ok(kevtype)
+        let (_, evtype) = parser::parse_evtype(&buf).unwrap();
+        Ok(evtype)
     }
 
-    fn read_kattr_header(&mut self) -> io::Result<MedusaCommAttributeHeader> {
-        let mut buf = [0; mem::size_of::<MedusaCommAttributeHeader>()];
+    fn read_attribute_header(&mut self) -> io::Result<MedusaAttributeHeader> {
+        let mut buf = [0; mem::size_of::<MedusaAttributeHeader>()];
         self.read_exact(&mut buf)?;
-        let (_, kattr_header) = parser::parse_kattr_header(&buf).unwrap();
-        Ok(kattr_header)
+        let (_, attr_header) = parser::parse_attribute_header(&buf).unwrap();
+        Ok(attr_header)
     }
 
-    fn read_kattrs(&mut self) -> io::Result<Vec<MedusaCommAttribute>> {
+    fn read_attributes(&mut self) -> io::Result<Vec<MedusaAttribute>> {
         let mut res = Vec::new();
 
         loop {
-            let header = self.read_kattr_header()?;
+            let header = self.read_attribute_header()?;
 
             if header.r#type == MED_COMM_TYPE_END {
                 break;
             }
 
-            res.push(MedusaCommAttribute {
+            res.push(MedusaAttribute {
                 header,
                 ..Default::default()
             });
@@ -95,21 +95,21 @@ trait ReadChannel {
 
     fn read_fetch_answer(
         &mut self,
-        classes: &HashMap<u64, MedusaCommKClass>,
+        classes: &HashMap<u64, MedusaClass>,
     ) -> io::Result<FetchAnswer> {
         let mut buf = [0; 2 * mem::size_of::<u64>()];
         self.read_exact(&mut buf)?;
-        let (_, (kclassid, msg_seq)) = parser::parse_fetch_answer_stage0(&buf).unwrap();
+        let (_, (class_id, msg_seq)) = parser::parse_fetch_answer_stage0(&buf).unwrap();
 
         let class = classes
-            .get(&kclassid)
-            .unwrap_or_else(|| panic!("Unknown class with id {:x}", kclassid));
+            .get(&class_id)
+            .unwrap_or_else(|| panic!("Unknown class with id {:x}", class_id));
         let data_len = class.header.size as usize;
 
         let mut buf = vec![0; data_len];
         self.read_exact(&mut buf)?;
         let (_, fetch_answer) =
-            parser::parse_fetch_answer_stage1(&buf, (kclassid, msg_seq), data_len).unwrap();
+            parser::parse_fetch_answer_stage1(&buf, (class_id, msg_seq), data_len).unwrap();
 
         Ok(fetch_answer)
     }
@@ -135,7 +135,7 @@ impl<T: io::Read> ReadChannel for NativeByteOrderChannel<T> {
 #[derive(Clone)]
 pub struct SharedContext {
     // TODO using this map seems to be very slow
-    pub classes: Arc<Mutex<HashMap<u64, MedusaCommKClass>>>,
+    pub classes: Arc<Mutex<HashMap<u64, MedusaClass>>>,
 
     sender: Sender<Arc<[u8]>>,
     request_id_cn: Arc<AtomicU64>,
@@ -150,10 +150,10 @@ impl SharedContext {
         }
     }
 
-    fn request_object(&self, req_type: RequestType, kclassid: u64, data: &[u8]) {
-        let req = MedusaCommRequest {
+    fn request_object(&self, req_type: RequestType, class_id: u64, data: &[u8]) {
+        let req = MedusaRequest {
             req_type,
-            kclassid,
+            class_id,
             id: self.get_new_request_id(),
             data,
         };
@@ -163,13 +163,13 @@ impl SharedContext {
             .expect("channel is disconnected");
     }
 
-    pub fn update_object(&self, kclassid: u64, data: &[u8]) {
-        self.request_object(RequestType::Update, kclassid, data);
+    pub fn update_object(&self, class_id: u64, data: &[u8]) {
+        self.request_object(RequestType::Update, class_id, data);
     }
 
-    pub fn fetch_object(&self, kclassid: u64, data: &[u8]) {
+    pub fn fetch_object(&self, class_id: u64, data: &[u8]) {
         // TODO callback
-        self.request_object(RequestType::Fetch, kclassid, data);
+        self.request_object(RequestType::Fetch, class_id, data);
     }
 
     fn get_new_request_id(&self) -> u64 {
@@ -187,7 +187,7 @@ pub struct Connection<R: Read> {
     context: SharedContext,
     class_id: HashMap<String, u64>,
 
-    evtypes: HashMap<u64, MedusaCommEvtype>,
+    evtypes: HashMap<u64, MedusaEvtype>,
 }
 
 impl<R: Read> Connection<R> {
@@ -240,16 +240,16 @@ impl<R: Read> Connection<R> {
                 );
                 match cmd {
                     MEDUSA_COMM_KCLASSDEF => {
-                        self.register_kclass_def()?;
+                        self.register_class()?;
                     }
                     MEDUSA_COMM_EVTYPEDEF => {
-                        self.register_kevtype_def()?;
+                        self.register_evtype()?;
                     }
                     MEDUSA_COMM_UPDATE_ANSWER => {
-                        self.update_answer()?;
+                        self.handle_update_answer()?;
                     }
                     MEDUSA_COMM_FETCH_ANSWER => {
-                        self.fetch_answer()?;
+                        self.handle_fetch_answer()?;
                     }
                     MEDUSA_COMM_FETCH_ERROR => {
                         eprintln!("MEDUSA_COMM_FETCH_ERROR");
@@ -276,9 +276,9 @@ impl<R: Read> Connection<R> {
             .expect("Thread pool is not active")
             .execute(move || {
                 let request_id = auth_data.request_id;
-                let result = auth_cb(&context, auth_data) as u16;
+                let status = auth_cb(&context, auth_data) as u16;
 
-                let decision = DecisionAnswer { request_id, result };
+                let decision = DecisionAnswer { request_id, status };
                 context
                     .sender
                     .send(Arc::from(decision.as_bytes()))
@@ -349,15 +349,15 @@ impl<R: Read> Connection<R> {
         })
     }
 
-    fn register_kclass_def(&mut self) -> io::Result<()> {
-        let mut kclass = self.channel.read_kclass()?;
-        let size = kclass.header.size; // copy so there's no UB when referencing packed struct field
-        let name = kclass.header.name();
-        println!("kclass name = {}, size = {}", name, size);
+    fn register_class(&mut self) -> io::Result<()> {
+        let mut class = self.channel.read_class()?;
+        let size = class.header.size; // copy so there's no UB when referencing packed struct field
+        let name = class.header.name();
+        println!("class name = {}, size = {}", name, size);
 
-        let kattrs = self.channel.read_kattrs()?;
+        let attrs = self.channel.read_attributes()?;
         println!("attributes:");
-        for attr in kattrs {
+        for attr in attrs {
             println!(
                 "  attr={}, offset={}, type={:x}, len={}",
                 attr.header.name(),
@@ -365,26 +365,26 @@ impl<R: Read> Connection<R> {
                 attr.header.r#type as u16,
                 attr.header.length
             );
-            kclass.attributes.push(attr);
+            class.attributes.push(attr);
         }
         println!();
 
-        self.class_id.insert(name, kclass.header.kclassid);
+        self.class_id.insert(name, class.header.id);
         self.context
             .classes
             .lock()
             .unwrap()
-            .insert(kclass.header.kclassid, kclass);
+            .insert(class.header.id, class);
 
         Ok(())
     }
 
-    fn register_kevtype_def(&mut self) -> io::Result<()> {
-        let mut kevtype = self.channel.read_kevtype()?;
-        let ev_sub = kevtype.ev_sub;
-        let ev_obj = kevtype.ev_obj;
+    fn register_evtype(&mut self) -> io::Result<()> {
+        let mut evtype = self.channel.read_evtype()?;
+        let ev_sub = evtype.ev_sub;
+        let ev_obj = evtype.ev_obj;
 
-        println!("kevtype name = {}", kevtype.name());
+        println!("evtype name = {}", evtype.name());
         println!("sub = 0x{:x}, obj = 0x{:x}", ev_sub, ev_obj);
 
         let classes = self.context.classes.lock().unwrap();
@@ -397,30 +397,30 @@ impl<R: Read> Connection<R> {
         );
         println!(
             "ev_name0 = {}, ev_name1 = {}",
-            cstr_to_string(&kevtype.ev_name[0]),
-            cstr_to_string(&kevtype.ev_name[1])
+            cstr_to_string(&evtype.ev_name[0]),
+            cstr_to_string(&evtype.ev_name[1])
         );
-        println!("actbit = 0x{:x}", { kevtype.actbit });
+        println!("actbit = 0x{:x}", { evtype.actbit });
 
-        if kevtype.ev_sub == kevtype.ev_obj && kevtype.ev_name[0] == kevtype.ev_name[1] {
-            kevtype.ev_obj = 0;
-            kevtype.ev_name[1] = [0; MEDUSA_COMM_ATTRNAME_MAX];
+        if evtype.ev_sub == evtype.ev_obj && evtype.ev_name[0] == evtype.ev_name[1] {
+            evtype.ev_obj = 0;
+            evtype.ev_name[1] = [0; MEDUSA_COMM_ATTRNAME_MAX];
         }
 
-        let kattrs = self.channel.read_kattrs()?;
+        let attrs = self.channel.read_attributes()?;
         print!("attributes:");
-        for attr in kattrs {
+        for attr in attrs {
             print!(" {}", attr.header.name());
         }
         println!();
 
-        println!("evid = 0x{:x}", { kevtype.evid });
-        self.evtypes.insert(kevtype.evid, kevtype);
+        println!("evid = 0x{:x}", { evtype.evid });
+        self.evtypes.insert(evtype.evid, evtype);
 
         Ok(())
     }
 
-    fn update_answer(&mut self) -> io::Result<()> {
+    fn handle_update_answer(&mut self) -> io::Result<()> {
         let ans = self.channel.read_update_answer()?;
         println!("{:#?}", ans);
         println!(
@@ -429,14 +429,14 @@ impl<R: Read> Connection<R> {
                 .classes
                 .lock()
                 .unwrap()
-                .get(&{ ans.kclassid })
+                .get(&{ ans.class_id })
                 .map(|c| c.header.name())
         );
 
         Ok(())
     }
 
-    fn fetch_answer(&mut self) -> io::Result<()> {
+    fn handle_fetch_answer(&mut self) -> io::Result<()> {
         let ans = self
             .channel
             .read_fetch_answer(&self.context.classes.lock().unwrap())?;

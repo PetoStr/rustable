@@ -33,27 +33,26 @@ const _MED_COMM_TYPE_STRING: u8 = 0x03;
 const _MED_COMM_TYPE_BITMAP: u8 = 0x04;
 const _MED_COMM_TYPE_BYTES: u8 = 0x05;
 
-// TODO refactor these weird names
 #[derive(Default, Clone)]
-pub struct MedusaCommKClassHeader {
-    kclassid: u64,
+pub struct MedusaClassHeader {
+    id: u64,
     size: i16,
     name: [u8; MEDUSA_COMM_KCLASSNAME_MAX],
 }
 
-impl MedusaCommKClassHeader {
+impl MedusaClassHeader {
     fn name(&self) -> String {
         cstr_to_string(&self.name)
     }
 }
 
 #[derive(Default, Clone)]
-pub struct MedusaCommKClass {
-    header: MedusaCommKClassHeader,
-    attributes: Vec<MedusaCommAttribute>,
+pub struct MedusaClass {
+    header: MedusaClassHeader,
+    attributes: Vec<MedusaAttribute>,
 }
 
-impl MedusaCommKClass {
+impl MedusaClass {
     pub fn set_attribute(&mut self, attr_name: &str, data: Vec<u8>) {
         let name = self.header.name();
         let mut attr = self
@@ -93,26 +92,26 @@ impl MedusaCommKClass {
 }
 
 #[derive(Default, Clone)]
-pub struct MedusaCommAttributeHeader {
+pub struct MedusaAttributeHeader {
     offset: i16,
     length: i16, // size in bytes
     r#type: u8,  // i think this should be u8 and not i8 because of bit masks
     name: [u8; MEDUSA_COMM_ATTRNAME_MAX],
 }
 
-impl MedusaCommAttributeHeader {
+impl MedusaAttributeHeader {
     fn name(&self) -> String {
         cstr_to_string(&self.name)
     }
 }
 
 #[derive(Default, Clone)]
-pub struct MedusaCommAttribute {
-    header: MedusaCommAttributeHeader,
+pub struct MedusaAttribute {
+    header: MedusaAttributeHeader,
     data: Vec<u8>,
 }
 
-impl MedusaCommAttribute {
+impl MedusaAttribute {
     fn pack_data(&self) -> Vec<u8> {
         self.data
             .iter()
@@ -125,7 +124,7 @@ impl MedusaCommAttribute {
 
 #[derive(Clone, Copy, Debug)]
 #[repr(packed)]
-pub struct MedusaCommEvtype {
+pub struct MedusaEvtype {
     evid: u64,
     size: u16,
     actbit: u16,
@@ -137,41 +136,41 @@ pub struct MedusaCommEvtype {
     // TODO attributes
 }
 
-impl MedusaCommEvtype {
+impl MedusaEvtype {
     fn name(&self) -> String {
         cstr_to_string(&self.name)
     }
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum RequestType {
+enum RequestType {
     Fetch,
     Update,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct MedusaCommRequest<'a> {
+pub struct MedusaRequest<'a> {
     req_type: RequestType,
-    kclassid: u64,
+    class_id: u64,
     id: u64,
     data: &'a [u8],
 }
 
-impl<'a> MedusaCommRequest<'_> {
+impl<'a> MedusaRequest<'_> {
     // TODO big endian - check rust core to_le_bytes() implementation
     // consider chaning the function name
     fn as_bytes(&self) -> Vec<u8> {
-        let update_b = match self.req_type {
+        let request = match self.req_type {
             RequestType::Fetch => MEDUSA_COMM_FETCH_REQUEST.to_le_bytes(),
             RequestType::Update => MEDUSA_COMM_UPDATE_REQUEST.to_le_bytes(),
         };
-        let kclassid_b = self.kclassid.to_le_bytes();
-        let id_b = self.id.to_le_bytes();
-        update_b
+        let class_id = self.class_id.to_le_bytes();
+        let id = self.id.to_le_bytes();
+        request
             .iter()
             .copied()
-            .chain(kclassid_b.iter().copied())
-            .chain(id_b.iter().copied())
+            .chain(class_id.iter().copied())
+            .chain(id.iter().copied())
             .chain(self.data.iter().copied())
             .collect::<Vec<u8>>()
     }
@@ -181,21 +180,21 @@ impl<'a> MedusaCommRequest<'_> {
 #[repr(packed)]
 pub struct DecisionAnswer {
     request_id: u64,
-    result: u16,
+    status: u16,
 }
 
 impl DecisionAnswer {
     // TODO big endian
     // TODO as_bytes adds additional data -> change name?
     fn as_bytes(&self) -> [u8; 8 + std::mem::size_of::<Self>()] {
-        let answer_b = MEDUSA_COMM_AUTHANSWER.to_le_bytes();
-        let request_b = self.request_id.to_le_bytes();
-        let result_b = self.result.to_le_bytes();
-        answer_b
+        let answer = MEDUSA_COMM_AUTHANSWER.to_le_bytes();
+        let request = self.request_id.to_le_bytes();
+        let status = self.status.to_le_bytes();
+        answer
             .iter()
             .copied()
-            .chain(request_b.iter().copied())
-            .chain(result_b.iter().copied())
+            .chain(request.iter().copied())
+            .chain(status.iter().copied())
             .collect::<Vec<u8>>()
             .try_into()
             .unwrap()
@@ -205,14 +204,14 @@ impl DecisionAnswer {
 #[derive(Clone, Copy, Debug)]
 #[repr(packed)]
 pub struct UpdateAnswer {
-    kclassid: u64,
+    class_id: u64,
     msg_seq: u64,
-    ans_res: i32,
+    status: i32,
 }
 
 #[derive(Clone, Debug)]
 pub struct FetchAnswer {
-    kclassid: u64,
+    class_id: u64,
     msg_seq: u64,
     data: Vec<u8>,
 }
@@ -232,5 +231,5 @@ pub struct AuthRequestData {
     pub request_id: u64,
     pub event: String,
     pub subject: u64,
-    //pub object: MedusaCommKClass,
+    //pub object: MedusaClass,
 }

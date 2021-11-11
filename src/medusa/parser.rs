@@ -7,21 +7,21 @@ pub fn parse_command(i: &[u8]) -> IResult<&[u8], Command> {
     le_u32(i)
 }
 
-pub fn parse_kclass_header(i: &[u8]) -> IResult<&[u8], MedusaCommKClassHeader> {
-    let (i, kclassid) = le_u64(i)?;
+pub fn parse_class_header(i: &[u8]) -> IResult<&[u8], MedusaClassHeader> {
+    let (i, id) = le_u64(i)?;
     let (i, size) = le_i16(i)?;
     let (i, name) = take(MEDUSA_COMM_KCLASSNAME_MAX)(i)?;
     Ok((
         i,
-        MedusaCommKClassHeader {
-            kclassid,
+        MedusaClassHeader {
+            id,
             size,
             name: name.try_into().unwrap(),
         },
     ))
 }
 
-pub fn parse_kevtype(i: &[u8]) -> IResult<&[u8], MedusaCommEvtype> {
+pub fn parse_evtype(i: &[u8]) -> IResult<&[u8], MedusaEvtype> {
     let (i, evid) = le_u64(i)?;
     let (i, size) = le_u16(i)?;
     let (i, actbit) = le_u16(i)?;
@@ -32,7 +32,7 @@ pub fn parse_kevtype(i: &[u8]) -> IResult<&[u8], MedusaCommEvtype> {
     let (i, ev_name2) = take(MEDUSA_COMM_ATTRNAME_MAX)(i)?;
     Ok((
         i,
-        MedusaCommEvtype {
+        MedusaEvtype {
             evid,
             size,
             actbit,
@@ -44,7 +44,7 @@ pub fn parse_kevtype(i: &[u8]) -> IResult<&[u8], MedusaCommEvtype> {
     ))
 }
 
-pub fn parse_kattr_header(i: &[u8]) -> IResult<&[u8], MedusaCommAttributeHeader> {
+pub fn parse_attribute_header(i: &[u8]) -> IResult<&[u8], MedusaAttributeHeader> {
     let (i, offset) = le_i16(i)?;
     let (i, length) = le_i16(i)?;
     let (i, r#type) = le_u8(i)?;
@@ -52,7 +52,7 @@ pub fn parse_kattr_header(i: &[u8]) -> IResult<&[u8], MedusaCommAttributeHeader>
 
     Ok((
         i,
-        MedusaCommAttributeHeader {
+        MedusaAttributeHeader {
             offset,
             length,
             r#type,
@@ -62,35 +62,35 @@ pub fn parse_kattr_header(i: &[u8]) -> IResult<&[u8], MedusaCommAttributeHeader>
 }
 
 pub fn parse_update_answer(i: &[u8]) -> IResult<&[u8], UpdateAnswer> {
-    let (i, kclassid) = le_u64(i)?;
+    let (i, class_id) = le_u64(i)?;
     let (i, msg_seq) = le_u64(i)?;
-    let (i, ans_res) = le_i32(i)?;
+    let (i, status) = le_i32(i)?;
     Ok((
         i,
         UpdateAnswer {
-            kclassid,
+            class_id,
             msg_seq,
-            ans_res,
+            status,
         },
     ))
 }
 
 pub fn parse_fetch_answer_stage0(i: &[u8]) -> IResult<&[u8], (u64, u64)> {
-    let (i, kclassid) = le_u64(i)?;
+    let (i, class_id) = le_u64(i)?;
     let (i, msg_seq) = le_u64(i)?;
-    Ok((i, (kclassid, msg_seq)))
+    Ok((i, (class_id, msg_seq)))
 }
 
 pub fn parse_fetch_answer_stage1(
     i: &[u8],
-    (kclassid, msg_seq): (u64, u64),
+    (class_id, msg_seq): (u64, u64),
     data_len: usize,
 ) -> IResult<&[u8], FetchAnswer> {
     let (i, data) = take(data_len)(i)?;
     Ok((
         i,
         FetchAnswer {
-            kclassid,
+            class_id,
             msg_seq,
             data: data.to_vec(),
         },
