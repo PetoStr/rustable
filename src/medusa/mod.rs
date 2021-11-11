@@ -55,7 +55,7 @@ pub struct MedusaCommKClass {
 }
 
 impl MedusaCommKClass {
-    fn set_attribute(&mut self, attr_name: &str, data: Vec<u8>) {
+    pub fn set_attribute(&mut self, attr_name: &str, data: Vec<u8>) {
         let name = self.header.name();
         let mut attr = self
             .attributes
@@ -66,7 +66,7 @@ impl MedusaCommKClass {
         attr.data = data;
     }
 
-    fn get_attribute(&mut self, attr_name: &str) -> &[u8] {
+    pub fn get_attribute(&mut self, attr_name: &str) -> &[u8] {
         let name = self.header.name();
         let attr = self
             .attributes
@@ -77,7 +77,7 @@ impl MedusaCommKClass {
         &attr.data
     }
 
-    fn pack_attributes(&self) -> Vec<u8> {
+    pub fn pack_attributes(&self) -> Vec<u8> {
         let mut res = vec![0; self.header.size as usize];
 
         for attribute in &self.attributes {

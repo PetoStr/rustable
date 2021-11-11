@@ -4,7 +4,7 @@ use std::sync::Arc;
 use threadfin::{Task, ThreadPool};
 
 pub(crate) struct WriteWorker {
-    pub(crate) task: Option<Task<()>>,
+    pub(crate) _task: Option<Task<()>>,
 }
 
 impl WriteWorker {
@@ -19,8 +19,6 @@ impl WriteWorker {
             }
         });
 
-        Self {
-            task: Some(task),
-        }
+        Self { _task: Some(task) }
     }
 }

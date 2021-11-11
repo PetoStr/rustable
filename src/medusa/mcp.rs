@@ -8,7 +8,8 @@ use std::collections::HashMap;
 use std::io;
 use std::io::prelude::*;
 use std::mem;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use threadfin::ThreadPool;
 
 lazy_static! {
@@ -26,7 +27,7 @@ lazy_static! {
     };
 }
 
-trait Channel {
+trait ReadChannel {
     fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()>;
 
     fn read_u64(&mut self) -> io::Result<u64> {
@@ -117,39 +118,62 @@ trait Channel {
 // for native byte order
 struct NativeByteOrderChannel<R: Read> {
     read_handle: R,
-    sender: Sender<Arc<[u8]>>,
-    write_worker: WriteWorker,
 }
 
 impl<R: Read> NativeByteOrderChannel<R> {
-    fn new<W: Write + 'static + Send>(pool: &ThreadPool, write_handle: W, read_handle: R) -> Self {
-        let (sender, receiver) = unbounded();
-        let write_worker = WriteWorker::new(pool, write_handle, receiver);
-        Self {
-            read_handle,
-            sender,
-            write_worker,
-        }
-    }
-
-    fn write_all(&self, buf: &[u8]) {
-        self.sender
-            .send(Arc::from(buf))
-            .expect("channel is disconnected");
+    fn new(read_handle: R) -> Self {
+        Self { read_handle }
     }
 }
 
-impl<R: Read> Drop for NativeByteOrderChannel<R> {
-    fn drop(&mut self) {
-        if let Some(task) = self.write_worker.task.take() {
-            task.join();
-        }
-    }
-}
-
-impl<T: io::Read> Channel for NativeByteOrderChannel<T> {
+impl<T: io::Read> ReadChannel for NativeByteOrderChannel<T> {
     fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
         self.read_handle.read_exact(buf)
+    }
+}
+
+#[derive(Clone)]
+pub struct SharedContext {
+    // TODO using this map seems to be very slow
+    pub classes: Arc<Mutex<HashMap<u64, MedusaCommKClass>>>,
+
+    sender: Sender<Arc<[u8]>>,
+    request_id_cn: Arc<AtomicU64>,
+}
+
+impl SharedContext {
+    fn new(sender: Sender<Arc<[u8]>>) -> Self {
+        Self {
+            classes: Arc::new(Mutex::new(HashMap::new())),
+            sender,
+            request_id_cn: Arc::new(AtomicU64::new(111)),
+        }
+    }
+
+    fn request_object(&self, req_type: RequestType, kclassid: u64, data: &[u8]) {
+        let req = MedusaCommRequest {
+            req_type,
+            kclassid,
+            id: self.get_new_request_id(),
+            data,
+        };
+
+        self.sender
+            .send(Arc::from(req.as_bytes()))
+            .expect("channel is disconnected");
+    }
+
+    pub fn update_object(&self, kclassid: u64, data: &[u8]) {
+        self.request_object(RequestType::Update, kclassid, data);
+    }
+
+    pub fn fetch_object(&self, kclassid: u64, data: &[u8]) {
+        // TODO callback
+        self.request_object(RequestType::Fetch, kclassid, data);
+    }
+
+    fn get_new_request_id(&self) -> u64 {
+        self.request_id_cn.fetch_add(1, Ordering::Relaxed)
     }
 }
 
@@ -160,18 +184,21 @@ pub struct Connection<R: Read> {
 
     pool: Option<ThreadPool>,
 
-    classes: HashMap<u64, MedusaCommKClass>,
+    context: SharedContext,
     class_id: HashMap<String, u64>,
 
     evtypes: HashMap<u64, MedusaCommEvtype>,
-
-    request_id_cn: u64,
 }
 
 impl<R: Read> Connection<R> {
     pub fn new<W: Write + 'static + Send>(write_handle: W, read_handle: R) -> io::Result<Self> {
         let pool = ThreadPool::builder().size(threadfin::PerCore(2)).build();
-        let mut channel = NativeByteOrderChannel::new(&pool, write_handle, read_handle);
+
+        let mut channel = NativeByteOrderChannel::new(read_handle);
+        let (sender, receiver) = unbounded();
+        let _write_worker = WriteWorker::new(&pool, write_handle, receiver);
+
+        let context = SharedContext::new(sender);
 
         let greeting = channel.read_u64()?;
         println!("greeting = 0x{:016x}", greeting);
@@ -191,17 +218,15 @@ impl<R: Read> Connection<R> {
         Ok(Self {
             channel,
             pool: Some(pool),
-            classes: HashMap::new(),
+            context,
             class_id: HashMap::new(),
             evtypes: HashMap::new(),
-
-            request_id_cn: 111,
         })
     }
 
     pub fn poll_loop<F>(&mut self, auth_cb: F) -> io::Result<()>
     where
-        F: Fn(AuthRequestData) -> MedusaAnswer,
+        F: Fn(&SharedContext, AuthRequestData) -> MedusaAnswer,
         F: Clone + Send + 'static,
     {
         loop {
@@ -233,26 +258,6 @@ impl<R: Read> Connection<R> {
                 }
             } else {
                 let auth_data = self.acquire_auth_req_data(id)?;
-
-                if auth_data.event == "getfile" || auth_data.event == "getprocess" {
-                    let subject = self.classes.get_mut(&auth_data.subject).unwrap();
-                    println!("vs = {:?}", subject.get_attribute("vs"));
-                    if auth_data.event == "getfile" {
-                        //subject.set_attribute("med_oact", vec![0xff, 0xff]);
-                        subject.set_attribute("med_oact", vec![]);
-                        //subject.set_attribute("vs", vec![]);
-                    } else {
-                        //subject.set_attribute("med_oact", vec![0xff, 0xff]);
-                        //subject.set_attribute("med_sact", vec![0xff, 0xff]);
-                        subject.set_attribute("med_oact", vec![]);
-                        subject.set_attribute("med_sact", vec![]);
-                        //subject.set_attribute("vs", vec![]);
-                    }
-
-                    let packed_attrs = subject.pack_attributes();
-                    self.update_object(auth_data.subject, &packed_attrs);
-                }
-
                 self.execute_auth_task(auth_cb.clone(), auth_data);
             }
 
@@ -261,20 +266,23 @@ impl<R: Read> Connection<R> {
     }
 
     fn execute_auth_task<F>(&mut self, auth_cb: F, auth_data: AuthRequestData)
-        where F: Fn(AuthRequestData) -> MedusaAnswer,
-              F: Send + 'static,
+    where
+        F: Fn(&SharedContext, AuthRequestData) -> MedusaAnswer,
+        F: Send + 'static,
     {
-        let sender = self.channel.sender.clone();
-        self
-            .pool
+        let context = self.context.clone();
+        self.pool
             .as_ref()
             .expect("Thread pool is not active")
             .execute(move || {
                 let request_id = auth_data.request_id;
-                let result = auth_cb(auth_data) as u16;
+                let result = auth_cb(&context, auth_data) as u16;
 
                 let decision = DecisionAnswer { request_id, result };
-                sender.send(Arc::from(decision.as_bytes())).expect("channel is disconnected");
+                context
+                    .sender
+                    .send(Arc::from(decision.as_bytes()))
+                    .expect("channel is disconnected");
             });
     }
 
@@ -308,8 +316,10 @@ impl<R: Read> Connection<R> {
         let ev_sub = acctype.ev_sub;
         let ev_obj = acctype.ev_obj;
 
+        let mut classes = self.context.classes.lock().unwrap();
+
         // subject type
-        let sub_type = self.classes.get_mut(&ev_sub).expect("Unknown subject type");
+        let sub_type = classes.get_mut(&ev_sub).expect("Unknown subject type");
         println!("sub_type name = {}", sub_type.header.name());
 
         // there seems to be padding so store into buffer first
@@ -324,7 +334,7 @@ impl<R: Read> Connection<R> {
 
         // object type
         if ev_obj != 0 {
-            let obj_type = self.classes.get(&ev_obj).expect("Unknown object type");
+            let obj_type = classes.get(&ev_obj).expect("Unknown object type");
             println!("obj_type name = {}", obj_type.header.name());
 
             let mut obj = vec![0; obj_type.header.size as usize];
@@ -360,7 +370,11 @@ impl<R: Read> Connection<R> {
         println!();
 
         self.class_id.insert(name, kclass.header.kclassid);
-        self.classes.insert(kclass.header.kclassid, kclass);
+        self.context
+            .classes
+            .lock()
+            .unwrap()
+            .insert(kclass.header.kclassid, kclass);
 
         Ok(())
     }
@@ -373,8 +387,9 @@ impl<R: Read> Connection<R> {
         println!("kevtype name = {}", kevtype.name());
         println!("sub = 0x{:x}, obj = 0x{:x}", ev_sub, ev_obj);
 
-        let sub_type = self.classes.get(&ev_sub).expect("Unknown subject type");
-        let obj_type = self.classes.get(&ev_obj).expect("Unknown object type");
+        let classes = self.context.classes.lock().unwrap();
+        let sub_type = classes.get(&ev_sub).expect("Unknown subject type");
+        let obj_type = classes.get(&ev_obj).expect("Unknown object type");
         println!(
             "sub name = {}, obj name = {}",
             sub_type.header.name(),
@@ -405,48 +420,29 @@ impl<R: Read> Connection<R> {
         Ok(())
     }
 
-    fn get_new_request_id(&mut self) -> u64 {
-        let res = self.request_id_cn;
-        self.request_id_cn += 1;
-        res
-    }
-
     fn update_answer(&mut self) -> io::Result<()> {
         let ans = self.channel.read_update_answer()?;
         println!("{:#?}", ans);
         println!(
             "class = {:?}",
-            self.classes.get(&{ ans.kclassid }).map(|c| c.header.name())
+            self.context
+                .classes
+                .lock()
+                .unwrap()
+                .get(&{ ans.kclassid })
+                .map(|c| c.header.name())
         );
 
         Ok(())
     }
 
     fn fetch_answer(&mut self) -> io::Result<()> {
-        let ans = self.channel.read_fetch_answer(&self.classes)?;
+        let ans = self
+            .channel
+            .read_fetch_answer(&self.context.classes.lock().unwrap())?;
         println!("fetch_answer = {:#?}", ans);
 
         Ok(())
-    }
-
-    fn request_object(&mut self, req_type: RequestType, kclassid: u64, data: &[u8]) {
-        let req = MedusaCommRequest {
-            req_type,
-            kclassid,
-            id: self.get_new_request_id(),
-            data,
-        };
-
-        self.channel.write_all(&req.as_bytes());
-    }
-
-    fn update_object(&mut self, kclassid: u64, data: &[u8]) {
-        self.request_object(RequestType::Update, kclassid, data);
-    }
-
-    #[allow(dead_code)]
-    fn fetch_object(&mut self, kclassid: u64, data: &[u8]) {
-        self.request_object(RequestType::Fetch, kclassid, data);
     }
 }
 
