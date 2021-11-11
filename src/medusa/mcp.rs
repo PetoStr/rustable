@@ -26,75 +26,24 @@ lazy_static! {
 }
 
 trait Channel {
-    fn read_u64(&mut self) -> io::Result<u64>;
-    fn read_kclass(&mut self) -> io::Result<MedusaCommKClass>;
-    fn read_kevtype(&mut self) -> io::Result<MedusaCommEvtype>;
-    fn read_kattr_header(&mut self) -> io::Result<MedusaCommAttributeHeader>;
-    fn read_kattrs(&mut self) -> io::Result<Vec<MedusaCommAttribute>>;
-    fn read_command(&mut self) -> io::Result<Command>;
-    fn read_update_answer(&mut self) -> io::Result<UpdateAnswer>;
-    fn read_fetch_answer(
-        &mut self,
-        classes: &HashMap<u64, MedusaCommKClass>,
-    ) -> io::Result<FetchAnswer>;
-}
+    fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()>;
 
-// for native endianness
-struct NativeEndianChannel<R: Read> {
-    read_handle: R,
-    sender: Sender<Arc<[u8]>>,
-    write_worker: WriteWorker,
-}
-
-impl<R: Read> NativeEndianChannel<R> {
-    fn new<W: Write + 'static + Send>(write_handle: W, read_handle: R) -> Self {
-        let (sender, receiver) = unbounded();
-        let write_worker = WriteWorker::new(write_handle, receiver);
-        Self {
-            read_handle,
-            sender,
-            write_worker,
-        }
-    }
-
-    fn write_all(&self, buf: &[u8]) {
-        self.sender
-            .send(Arc::from(buf))
-            .expect("channel is disconnected");
-    }
-}
-
-impl<R: Read> Drop for NativeEndianChannel<R> {
-    fn drop(&mut self) {
-        if let Some(thread) = self.write_worker.thread.take() {
-            thread.join().unwrap();
-        }
-    }
-}
-
-impl<T: io::Read> io::Read for NativeEndianChannel<T> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.read_handle.read(buf)
-    }
-}
-
-impl<T: io::Read> Channel for NativeEndianChannel<T> {
     fn read_u64(&mut self) -> io::Result<u64> {
         let mut buf = [0; 8];
-        self.read_handle.read_exact(&mut buf)?;
+        self.read_exact(&mut buf)?;
         Ok(u64::from_ne_bytes(buf))
     }
 
     fn read_command(&mut self) -> io::Result<Command> {
         let mut buf = [0; mem::size_of::<Command>()];
-        self.read_handle.read_exact(&mut buf)?;
+        self.read_exact(&mut buf)?;
         let (_, cmd) = parser::parse_command(&buf).unwrap();
         Ok(cmd)
     }
 
     fn read_kclass(&mut self) -> io::Result<MedusaCommKClass> {
         let mut buf = [0; mem::size_of::<MedusaCommKClassHeader>()];
-        self.read_handle.read_exact(&mut buf)?;
+        self.read_exact(&mut buf)?;
         let (_, header) = parser::parse_kclass_header(&buf).unwrap();
         Ok(MedusaCommKClass {
             header,
@@ -104,14 +53,14 @@ impl<T: io::Read> Channel for NativeEndianChannel<T> {
 
     fn read_kevtype(&mut self) -> io::Result<MedusaCommEvtype> {
         let mut buf = [0; std::mem::size_of::<MedusaCommEvtype>()];
-        self.read_handle.read_exact(&mut buf)?;
+        self.read_exact(&mut buf)?;
         let (_, kevtype) = parser::parse_kevtype(&buf).unwrap();
         Ok(kevtype)
     }
 
     fn read_kattr_header(&mut self) -> io::Result<MedusaCommAttributeHeader> {
         let mut buf = [0; mem::size_of::<MedusaCommAttributeHeader>()];
-        self.read_handle.read_exact(&mut buf)?;
+        self.read_exact(&mut buf)?;
         let (_, kattr_header) = parser::parse_kattr_header(&buf).unwrap();
         Ok(kattr_header)
     }
@@ -137,7 +86,7 @@ impl<T: io::Read> Channel for NativeEndianChannel<T> {
 
     fn read_update_answer(&mut self) -> io::Result<UpdateAnswer> {
         let mut buf = [0; std::mem::size_of::<UpdateAnswer>()];
-        self.read_handle.read_exact(&mut buf)?;
+        self.read_exact(&mut buf)?;
         let (_, update_answer) = parser::parse_update_answer(&buf).unwrap();
         Ok(update_answer)
     }
@@ -147,7 +96,7 @@ impl<T: io::Read> Channel for NativeEndianChannel<T> {
         classes: &HashMap<u64, MedusaCommKClass>,
     ) -> io::Result<FetchAnswer> {
         let mut buf = [0; 2 * mem::size_of::<u64>()];
-        self.read_handle.read_exact(&mut buf)?;
+        self.read_exact(&mut buf)?;
         let (_, (kclassid, msg_seq)) = parser::parse_fetch_answer_stage0(&buf).unwrap();
 
         let class = classes
@@ -156,7 +105,7 @@ impl<T: io::Read> Channel for NativeEndianChannel<T> {
         let data_len = class.header.size as usize;
 
         let mut buf = vec![0; data_len];
-        self.read_handle.read_exact(&mut buf)?;
+        self.read_exact(&mut buf)?;
         let (_, fetch_answer) =
             parser::parse_fetch_answer_stage1(&buf, (kclassid, msg_seq), data_len).unwrap();
 
@@ -164,10 +113,49 @@ impl<T: io::Read> Channel for NativeEndianChannel<T> {
     }
 }
 
+// for native byte order
+struct NativeByteOrderChannel<R: Read> {
+    read_handle: R,
+    sender: Sender<Arc<[u8]>>,
+    write_worker: WriteWorker,
+}
+
+impl<R: Read> NativeByteOrderChannel<R> {
+    fn new<W: Write + 'static + Send>(write_handle: W, read_handle: R) -> Self {
+        let (sender, receiver) = unbounded();
+        let write_worker = WriteWorker::new(write_handle, receiver);
+        Self {
+            read_handle,
+            sender,
+            write_worker,
+        }
+    }
+
+    fn write_all(&self, buf: &[u8]) {
+        self.sender
+            .send(Arc::from(buf))
+            .expect("channel is disconnected");
+    }
+}
+
+impl<R: Read> Drop for NativeByteOrderChannel<R> {
+    fn drop(&mut self) {
+        if let Some(thread) = self.write_worker.thread.take() {
+            thread.join().unwrap();
+        }
+    }
+}
+
+impl<T: io::Read> Channel for NativeByteOrderChannel<T> {
+    fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
+        self.read_handle.read_exact(buf)
+    }
+}
+
 pub struct Connection<R: Read> {
     // TODO endian based channel
     // channel: Box<dyn Channel<T>>,
-    channel: NativeEndianChannel<R>,
+    channel: NativeByteOrderChannel<R>,
 
     classes: HashMap<u64, MedusaCommKClass>,
     class_id: HashMap<String, u64>,
@@ -179,7 +167,7 @@ pub struct Connection<R: Read> {
 
 impl<R: Read> Connection<R> {
     pub fn new<W: Write + 'static + Send>(write_handle: W, read_handle: R) -> io::Result<Self> {
-        let mut channel = NativeEndianChannel::new(write_handle, read_handle);
+        let mut channel = NativeByteOrderChannel::new(write_handle, read_handle);
 
         let greeting = channel.read_u64()?;
         println!("greeting = 0x{:016x}", greeting);
