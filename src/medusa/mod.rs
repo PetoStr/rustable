@@ -1,8 +1,9 @@
 use crate::cstr_to_string;
 
 pub mod mcp;
-pub mod parser;
-pub mod writer;
+pub(crate) mod parser;
+pub(crate) mod reader;
+pub(crate) mod writer;
 
 type Command = u32;
 
