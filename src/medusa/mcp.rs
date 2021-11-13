@@ -1,14 +1,12 @@
 use crate::cstr_to_string;
+use crate::medusa::reader::{NativeByteOrderChannel, ReadChannel};
 use crate::medusa::writer::WriteWorker;
-use crate::medusa::reader::{ReadChannel, NativeByteOrderChannel};
 use crate::medusa::*;
 use crossbeam_channel::unbounded;
-use crossbeam_channel::Sender;
 use std::collections::HashMap;
 use std::io;
 use std::io::prelude::*;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use threadfin::ThreadPool;
 
 lazy_static! {
@@ -24,53 +22,6 @@ lazy_static! {
         map.insert(MEDUSA_COMM_UPDATE_ANSWER, "MEDUSA_COMM_UPDATE_ANSWER");
         map
     };
-}
-
-#[derive(Clone)]
-pub struct SharedContext {
-    // TODO using this map seems to be very slow
-    pub classes: Arc<Mutex<HashMap<u64, MedusaClass>>>,
-    pub evtypes: Arc<Mutex<HashMap<u64, MedusaEvtype>>>,
-
-    sender: Sender<Arc<[u8]>>,
-    request_id_cn: Arc<AtomicU64>,
-}
-
-impl SharedContext {
-    fn new(sender: Sender<Arc<[u8]>>) -> Self {
-        Self {
-            classes: Arc::new(Mutex::new(HashMap::new())),
-            evtypes: Arc::new(Mutex::new(HashMap::new())),
-            sender,
-            request_id_cn: Arc::new(AtomicU64::new(111)),
-        }
-    }
-
-    fn request_object(&self, req_type: RequestType, class_id: u64, data: &[u8]) {
-        let req = MedusaRequest {
-            req_type,
-            class_id,
-            id: self.get_new_request_id(),
-            data,
-        };
-
-        self.sender
-            .send(Arc::from(req.as_bytes()))
-            .expect("channel is disconnected");
-    }
-
-    pub fn update_object(&self, class_id: u64, data: &[u8]) {
-        self.request_object(RequestType::Update, class_id, data);
-    }
-
-    pub fn fetch_object(&self, class_id: u64, data: &[u8]) {
-        // TODO callback
-        self.request_object(RequestType::Fetch, class_id, data);
-    }
-
-    fn get_new_request_id(&self) -> u64 {
-        self.request_id_cn.fetch_add(1, Ordering::Relaxed)
-    }
 }
 
 pub struct Connection<R: Read> {

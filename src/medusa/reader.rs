@@ -1,9 +1,9 @@
+use crate::medusa::parser;
+use crate::medusa::*;
 use std::collections::HashMap;
 use std::io;
 use std::io::prelude::*;
 use std::mem;
-use crate::medusa::*;
-use crate::medusa::parser;
 
 pub(crate) trait ReadChannel {
     fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()>;
@@ -109,4 +109,3 @@ impl<R: Read> ReadChannel for NativeByteOrderChannel<R> {
         self.read_handle.read_exact(buf)
     }
 }
-
