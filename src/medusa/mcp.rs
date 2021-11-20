@@ -125,7 +125,7 @@ impl<R: Read> Connection<R> {
                 let decision = DecisionAnswer { request_id, status };
                 context
                     .sender
-                    .send(Arc::from(decision.as_bytes()))
+                    .send(Arc::from(decision.to_vec()))
                     .expect("channel is disconnected");
             });
     }
@@ -161,7 +161,11 @@ impl<R: Read> Connection<R> {
         let ev_obj = acctype.ev_obj;
 
         // subject type
-        let mut sub_type = self.context.classes.get_mut(&ev_sub).expect("Unknown subject type");
+        let mut sub_type = self
+            .context
+            .classes
+            .get_mut(&ev_sub)
+            .expect("Unknown subject type");
         println!("sub_type name = {}", sub_type.header.name());
 
         // there seems to be padding so store into buffer first
@@ -177,7 +181,11 @@ impl<R: Read> Connection<R> {
 
         // object type
         if ev_obj != 0 {
-            let obj_type = self.context.classes.get(&ev_obj).expect("Unknown object type");
+            let obj_type = self
+                .context
+                .classes
+                .get(&ev_obj)
+                .expect("Unknown object type");
             println!("obj_type name = {}", obj_type.header.name());
 
             let mut obj = vec![0; obj_type.header.size as usize];
@@ -213,9 +221,7 @@ impl<R: Read> Connection<R> {
         println!();
 
         self.class_id.insert(name, class.header.id);
-        self.context
-            .classes
-            .insert(class.header.id, class);
+        self.context.classes.insert(class.header.id, class);
 
         Ok(())
     }
@@ -228,8 +234,16 @@ impl<R: Read> Connection<R> {
         println!("evtype name = {}", evtype.name());
         println!("sub = 0x{:x}, obj = 0x{:x}", ev_sub, ev_obj);
 
-        let sub_type = self.context.classes.get(&ev_sub).expect("Unknown subject type");
-        let obj_type = self.context.classes.get(&ev_obj).expect("Unknown object type");
+        let sub_type = self
+            .context
+            .classes
+            .get(&ev_sub)
+            .expect("Unknown subject type");
+        let obj_type = self
+            .context
+            .classes
+            .get(&ev_obj)
+            .expect("Unknown object type");
         println!(
             "sub name = {}, obj name = {}",
             sub_type.header.name(),
@@ -255,9 +269,7 @@ impl<R: Read> Connection<R> {
         println!();
 
         println!("evid = 0x{:x}", { evtype.evid });
-        self.context
-            .evtypes
-            .insert(evtype.evid, evtype);
+        self.context.evtypes.insert(evtype.evid, evtype);
 
         Ok(())
     }
@@ -277,9 +289,7 @@ impl<R: Read> Connection<R> {
     }
 
     fn handle_fetch_answer(&mut self) -> io::Result<()> {
-        let ans = self
-            .channel
-            .read_fetch_answer(&self.context.classes)?;
+        let ans = self.channel.read_fetch_answer(&self.context.classes)?;
         println!("fetch_answer = {:#?}", ans);
 
         Ok(())

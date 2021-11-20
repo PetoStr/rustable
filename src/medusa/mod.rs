@@ -163,8 +163,7 @@ pub struct MedusaRequest<'a> {
 
 impl<'a> MedusaRequest<'_> {
     // TODO big endian - check rust core to_le_bytes() implementation
-    // consider chaning the function name
-    fn as_bytes(&self) -> Vec<u8> {
+    fn to_vec(self) -> Vec<u8> {
         let request = match self.req_type {
             RequestType::Fetch => MEDUSA_COMM_FETCH_REQUEST.to_le_bytes(),
             RequestType::Update => MEDUSA_COMM_UPDATE_REQUEST.to_le_bytes(),
@@ -190,8 +189,7 @@ pub struct DecisionAnswer {
 
 impl DecisionAnswer {
     // TODO big endian
-    // TODO as_bytes adds additional data -> change name?
-    fn as_bytes(&self) -> [u8; 8 + std::mem::size_of::<Self>()] {
+    fn to_vec(self) -> [u8; 8 + std::mem::size_of::<Self>()] {
         let answer = MEDUSA_COMM_AUTHANSWER.to_le_bytes();
         let request = self.request_id.to_le_bytes();
         let status = self.status.to_le_bytes();
@@ -277,7 +275,7 @@ impl SharedContext {
         };
 
         self.sender
-            .send(Arc::from(req.as_bytes()))
+            .send(Arc::from(req.to_vec()))
             .expect("channel is disconnected");
     }
 
