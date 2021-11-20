@@ -1,8 +1,8 @@
 use crate::cstr_to_string;
 use crossbeam_channel::Sender;
-use std::collections::HashMap;
+use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub mod mcp;
 pub(crate) mod parser;
@@ -63,7 +63,7 @@ impl MedusaClass {
         let mut attr = self
             .attributes
             .iter_mut()
-            .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does
+            .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does, maybe LinkedHashMap?
             .unwrap_or_else(|| panic!("{} has no attribute {}", name, attr_name));
 
         attr.data = data;
@@ -74,7 +74,7 @@ impl MedusaClass {
         let attr = self
             .attributes
             .iter()
-            .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does
+            .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does, maybe LinkedHashMap?
             .unwrap_or_else(|| panic!("{} has no attribute {}", name, attr_name));
 
         &attr.data
@@ -241,10 +241,9 @@ pub struct AuthRequestData {
 
 #[derive(Clone)]
 pub struct SharedContext {
-    // TODO using this map seems to be very slow
     // TODO private fields, pub fn? clone MedusaClass (e.g. in get_class(u64) -> MedusaClass)?
-    pub classes: Arc<Mutex<HashMap<u64, MedusaClass>>>,
-    pub evtypes: Arc<Mutex<HashMap<u64, MedusaEvtype>>>,
+    pub classes: Arc<DashMap<u64, MedusaClass>>,
+    pub evtypes: Arc<DashMap<u64, MedusaEvtype>>,
 
     sender: Sender<Arc<[u8]>>,
     request_id_cn: Arc<AtomicU64>,
@@ -253,8 +252,8 @@ pub struct SharedContext {
 impl SharedContext {
     fn new(sender: Sender<Arc<[u8]>>) -> Self {
         Self {
-            classes: Arc::new(Mutex::new(HashMap::new())),
-            evtypes: Arc::new(Mutex::new(HashMap::new())),
+            classes: Arc::new(DashMap::new()),
+            evtypes: Arc::new(DashMap::new()),
             sender,
             request_id_cn: Arc::new(AtomicU64::new(111)),
         }

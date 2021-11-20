@@ -1,6 +1,6 @@
 use crate::medusa::parser;
 use crate::medusa::*;
-use std::collections::HashMap;
+use dashmap::DashMap;
 use std::io;
 use std::io::prelude::*;
 use std::mem;
@@ -73,7 +73,7 @@ pub(crate) trait ReadChannel {
 
     fn read_fetch_answer(
         &mut self,
-        classes: &HashMap<u64, MedusaClass>,
+        classes: &DashMap<u64, MedusaClass>,
     ) -> io::Result<FetchAnswer> {
         let mut buf = [0; 2 * mem::size_of::<u64>()];
         self.read_exact(&mut buf)?;

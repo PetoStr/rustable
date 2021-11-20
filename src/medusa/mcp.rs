@@ -133,8 +133,7 @@ impl<R: Read> Connection<R> {
     fn acquire_auth_req_data(&mut self, id: u64) -> io::Result<AuthRequestData> {
         println!("Medusa auth request, id = 0x{:x}", id);
 
-        let evtypes = self.context.evtypes.lock().unwrap();
-        let acctype = evtypes.get(&id).expect("Unknown access type");
+        let acctype = self.context.evtypes.get(&id).expect("Unknown access type");
         println!("acctype name = {}", acctype.name());
 
         let request_id = self.channel.read_u64()?;
@@ -143,7 +142,7 @@ impl<R: Read> Connection<R> {
         let evid = self.channel.read_u64()?;
         println!("evid = 0x{:x}", evid);
 
-        let evtype = evtypes.get(&evid).expect("Unknown event type");
+        let evtype = self.context.evtypes.get(&evid).expect("Unknown event type");
         println!("evtype name = {}", evtype.name());
 
         println!("acctype.size = {}", { acctype.size });
@@ -161,10 +160,8 @@ impl<R: Read> Connection<R> {
         let ev_sub = acctype.ev_sub;
         let ev_obj = acctype.ev_obj;
 
-        let mut classes = self.context.classes.lock().unwrap();
-
         // subject type
-        let sub_type = classes.get_mut(&ev_sub).expect("Unknown subject type");
+        let mut sub_type = self.context.classes.get_mut(&ev_sub).expect("Unknown subject type");
         println!("sub_type name = {}", sub_type.header.name());
 
         // there seems to be padding so store into buffer first
@@ -176,10 +173,11 @@ impl<R: Read> Connection<R> {
                 sub[attr.header.offset as usize..][..attr.header.length as usize].to_vec();
             attr.data = new_data;
         }
+        drop(sub_type); // prevent deadlock by releasing write lock early
 
         // object type
         if ev_obj != 0 {
-            let obj_type = classes.get(&ev_obj).expect("Unknown object type");
+            let obj_type = self.context.classes.get(&ev_obj).expect("Unknown object type");
             println!("obj_type name = {}", obj_type.header.name());
 
             let mut obj = vec![0; obj_type.header.size as usize];
@@ -217,8 +215,6 @@ impl<R: Read> Connection<R> {
         self.class_id.insert(name, class.header.id);
         self.context
             .classes
-            .lock()
-            .unwrap()
             .insert(class.header.id, class);
 
         Ok(())
@@ -232,9 +228,8 @@ impl<R: Read> Connection<R> {
         println!("evtype name = {}", evtype.name());
         println!("sub = 0x{:x}, obj = 0x{:x}", ev_sub, ev_obj);
 
-        let classes = self.context.classes.lock().unwrap();
-        let sub_type = classes.get(&ev_sub).expect("Unknown subject type");
-        let obj_type = classes.get(&ev_obj).expect("Unknown object type");
+        let sub_type = self.context.classes.get(&ev_sub).expect("Unknown subject type");
+        let obj_type = self.context.classes.get(&ev_obj).expect("Unknown object type");
         println!(
             "sub name = {}, obj name = {}",
             sub_type.header.name(),
@@ -262,8 +257,6 @@ impl<R: Read> Connection<R> {
         println!("evid = 0x{:x}", { evtype.evid });
         self.context
             .evtypes
-            .lock()
-            .unwrap()
             .insert(evtype.evid, evtype);
 
         Ok(())
@@ -276,8 +269,6 @@ impl<R: Read> Connection<R> {
             "class = {:?}",
             self.context
                 .classes
-                .lock()
-                .unwrap()
                 .get(&{ ans.class_id })
                 .map(|c| c.header.name())
         );
@@ -288,7 +279,7 @@ impl<R: Read> Connection<R> {
     fn handle_fetch_answer(&mut self) -> io::Result<()> {
         let ans = self
             .channel
-            .read_fetch_answer(&self.context.classes.lock().unwrap())?;
+            .read_fetch_answer(&self.context.classes)?;
         println!("fetch_answer = {:#?}", ans);
 
         Ok(())

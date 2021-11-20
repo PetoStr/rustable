@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 crossbeam-channel = "0.5.1"
+dashmap = "4.0.2"
 lazy_static = "1.4.0"
 nom = "6.2.1"
 threadfin = "0.1.0"
