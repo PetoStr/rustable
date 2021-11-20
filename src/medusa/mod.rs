@@ -1,5 +1,6 @@
 use crate::cstr_to_string;
 use crossbeam_channel::Sender;
+use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -239,9 +240,8 @@ pub struct AuthRequestData {
 
 #[derive(Clone)]
 pub struct SharedContext {
-    // TODO private fields, pub fn? clone MedusaClass (e.g. in get_class(u64) -> MedusaClass)?
-    pub classes: Arc<DashMap<u64, MedusaClass>>,
-    pub evtypes: Arc<DashMap<u64, MedusaEvtype>>,
+    classes: Arc<DashMap<u64, MedusaClass>>,
+    evtypes: Arc<DashMap<u64, MedusaEvtype>>,
 
     sender: Sender<Arc<[u8]>>,
     request_id_cn: Arc<AtomicU64>,
@@ -255,6 +255,22 @@ impl SharedContext {
             sender,
             request_id_cn: Arc::new(AtomicU64::new(111)),
         }
+    }
+
+    pub fn class(&self, class_id: &u64) -> Option<Ref<'_, u64, MedusaClass>> {
+        self.classes.get(class_id)
+    }
+
+    pub fn class_mut(&self, class_id: &u64) -> Option<RefMut<'_, u64, MedusaClass>> {
+        self.classes.get_mut(class_id)
+    }
+
+    pub fn evtype(&self, ev_id: &u64) -> Option<Ref<'_, u64, MedusaEvtype>> {
+        self.evtypes.get(ev_id)
+    }
+
+    pub fn evtype_mut(&self, ev_id: &u64) -> Option<RefMut<'_, u64, MedusaEvtype>> {
+        self.evtypes.get_mut(ev_id)
     }
 
     pub fn update_object(&self, class_id: u64, data: &[u8]) {

@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     connection.poll_loop(|context: &SharedContext, auth_data: AuthRequestData| {
         if auth_data.event == "getfile" || auth_data.event == "getprocess" {
-            let mut subject = context.classes.get_mut(&auth_data.subject).unwrap();
+            let mut subject = context.class_mut(&auth_data.subject).unwrap();
             println!("vs = {:?}", subject.get_attribute("vs"));
 
             subject.set_attribute("med_oact", vec![]);
