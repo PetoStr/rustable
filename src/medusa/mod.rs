@@ -59,6 +59,7 @@ pub struct MedusaClass {
 }
 
 impl MedusaClass {
+    // TODO set_attribute_{unsigned,signed,string,bitmap,bytes}
     pub fn set_attribute(&mut self, attr_name: &str, data: Vec<u8>) {
         let name = self.header.name();
         let mut attr = self

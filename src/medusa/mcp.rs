@@ -31,6 +31,7 @@ pub struct Connection<R: Read> {
     context: SharedContext,
 
     pool: Option<ThreadPool>,
+    write_worker: WriteWorker,
 
     class_id: HashMap<String, u64>,
 }
@@ -41,7 +42,7 @@ impl<R: Read> Connection<R> {
 
         let mut channel = NativeByteOrderChannel::new(read_handle);
         let (sender, receiver) = unbounded();
-        let _write_worker = WriteWorker::new(&pool, write_handle, receiver);
+        let write_worker = WriteWorker::new(&pool, write_handle, receiver);
 
         let context = SharedContext::new(sender);
 
@@ -63,6 +64,7 @@ impl<R: Read> Connection<R> {
         Ok(Self {
             channel,
             pool: Some(pool),
+            write_worker,
             context,
             class_id: HashMap::new(),
         })
@@ -74,6 +76,19 @@ impl<R: Read> Connection<R> {
         F: Clone + Send + 'static,
     {
         loop {
+            if self
+                .write_worker
+                .task
+                .as_ref()
+                .filter(|t| !t.is_done())
+                .is_none()
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Write worker is not running.", // TODO why it stopped?
+                ));
+            }
+
             let id = self.channel.read_u64()?;
             if id == 0 {
                 let cmd = self.channel.read_command()?;
