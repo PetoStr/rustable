@@ -37,7 +37,7 @@ pub fn parse_evtype(i: &[u8]) -> IResult<&[u8], MedusaEvtype> {
             size,
             actbit,
             ev_sub,
-            ev_obj,
+            ev_obj: NonZeroU64::new(ev_obj),
             name: name.try_into().unwrap(),
             ev_name: [ev_name1.try_into().unwrap(), ev_name2.try_into().unwrap()],
         },

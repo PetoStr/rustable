@@ -194,7 +194,7 @@ impl<R: Read> Connection<R> {
         drop(sub_type); // prevent deadlock by releasing write lock early
 
         // object type
-        if ev_obj != 0 {
+        if let Some(ev_obj) = ev_obj.map(|x| x.get()) {
             let obj_type = self.context.class(&ev_obj).expect("Unknown object type");
             println!("obj_type name = {}", obj_type.header.name());
 
@@ -205,8 +205,9 @@ impl<R: Read> Connection<R> {
 
         Ok(AuthRequestData {
             request_id,
-            event: evtype.name(),
-            subject: ev_sub,
+            evtype_id: evid,
+            subject_id: ev_sub,
+            object_id: ev_obj,
         })
     }
 
@@ -239,7 +240,7 @@ impl<R: Read> Connection<R> {
     fn register_evtype(&mut self) -> io::Result<()> {
         let mut evtype = self.channel.read_evtype()?;
         let ev_sub = evtype.ev_sub;
-        let ev_obj = evtype.ev_obj;
+        let ev_obj = evtype.ev_obj.expect("ev_obj is 0").get(); // should always be non-zero from medusa
 
         println!("evtype name = {}", evtype.name());
         println!("sub = 0x{:x}, obj = 0x{:x}", ev_sub, ev_obj);
@@ -258,8 +259,8 @@ impl<R: Read> Connection<R> {
         );
         println!("actbit = 0x{:x}", { evtype.actbit });
 
-        if evtype.ev_sub == evtype.ev_obj && evtype.ev_name[0] == evtype.ev_name[1] {
-            evtype.ev_obj = 0;
+        if ev_sub == ev_obj && evtype.ev_name[0] == evtype.ev_name[1] {
+            evtype.ev_obj = None;
             evtype.ev_name[1] = [0; MEDUSA_COMM_ATTRNAME_MAX];
         }
 

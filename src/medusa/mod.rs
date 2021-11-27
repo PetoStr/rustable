@@ -4,6 +4,7 @@ use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::num::NonZeroU64;
 
 pub mod mcp;
 pub(crate) mod parser;
@@ -47,7 +48,7 @@ pub struct MedusaClassHeader {
 }
 
 impl MedusaClassHeader {
-    fn name(&self) -> String {
+    pub fn name(&self) -> String {
         cstr_to_string(&self.name)
     }
 }
@@ -107,7 +108,7 @@ pub struct MedusaAttributeHeader {
 }
 
 impl MedusaAttributeHeader {
-    fn name(&self) -> String {
+    pub fn name(&self) -> String {
         cstr_to_string(&self.name)
     }
 }
@@ -137,14 +138,14 @@ pub struct MedusaEvtype {
     actbit: u16,
     //ev_kclass: [u64; 2],
     ev_sub: u64,
-    ev_obj: u64,
+    ev_obj: Option<NonZeroU64>,
     name: [u8; MEDUSA_COMM_EVNAME_MAX],
     ev_name: [[u8; MEDUSA_COMM_ATTRNAME_MAX]; 2],
     // TODO attributes
 }
 
 impl MedusaEvtype {
-    fn name(&self) -> String {
+    pub fn name(&self) -> String {
         cstr_to_string(&self.name)
     }
 }
@@ -232,11 +233,10 @@ pub enum MedusaAnswer {
 
 #[derive(Clone)]
 pub struct AuthRequestData {
-    // TODO
     pub request_id: u64,
-    pub event: String,
-    pub subject: u64,
-    //pub object: MedusaClass,
+    pub evtype_id: u64,
+    pub subject_id: u64,
+    pub object_id: Option<NonZeroU64>,
 }
 
 #[derive(Clone)]
