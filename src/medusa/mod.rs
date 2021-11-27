@@ -82,7 +82,7 @@ impl MedusaClass {
         &attr.data
     }
 
-    pub fn pack_attributes(&self) -> Vec<u8> {
+    fn pack_attributes(&self) -> Vec<u8> {
         let mut res = vec![0; self.header.size as usize];
 
         for attribute in &self.attributes {
@@ -274,8 +274,12 @@ impl SharedContext {
         self.evtypes.get_mut(ev_id)
     }
 
-    pub fn update_object(&self, class_id: u64, data: &[u8]) {
-        self.request_object(RequestType::Update, class_id, data);
+    pub fn update_object(&self, object: &MedusaClass) {
+        self.request_object(
+            RequestType::Update,
+            object.header.id,
+            &object.pack_attributes(),
+        );
     }
 
     pub fn fetch_object(&self, class_id: u64, data: &[u8]) {

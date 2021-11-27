@@ -23,8 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 subject.set_attribute("med_sact", vec![]);
             }
 
-            let packed_attrs = subject.pack_attributes();
-            context.update_object(auth_data.subject, &packed_attrs);
+            context.update_object(&subject);
         }
 
         MedusaAnswer::Ok
