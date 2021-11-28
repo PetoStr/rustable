@@ -1,10 +1,10 @@
 use crate::cstr_to_string;
-use crossbeam_channel::Sender;
+use crossbeam_channel::{bounded, Sender};
 use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::DashMap;
+use std::num::NonZeroU64;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::num::NonZeroU64;
 
 pub mod mcp;
 pub(crate) mod parser;
@@ -243,6 +243,7 @@ pub struct AuthRequestData {
 pub struct SharedContext {
     classes: Arc<DashMap<u64, MedusaClass>>,
     evtypes: Arc<DashMap<u64, MedusaEvtype>>,
+    fetch_requests: Arc<DashMap<u64, Sender<FetchAnswer>>>,
 
     sender: Sender<Arc<[u8]>>,
     request_id_cn: Arc<AtomicU64>,
@@ -253,6 +254,7 @@ impl SharedContext {
         Self {
             classes: Arc::new(DashMap::new()),
             evtypes: Arc::new(DashMap::new()),
+            fetch_requests: Arc::new(DashMap::new()),
             sender,
             request_id_cn: Arc::new(AtomicU64::new(111)),
         }
@@ -275,29 +277,34 @@ impl SharedContext {
     }
 
     pub fn update_object(&self, object: &MedusaClass) {
-        self.request_object(
-            RequestType::Update,
-            object.header.id,
-            &object.pack_attributes(),
-        );
-    }
-
-    pub fn fetch_object(&self, class_id: u64, data: &[u8]) {
-        // TODO callback
-        self.request_object(RequestType::Fetch, class_id, data);
-    }
-
-    fn request_object(&self, req_type: RequestType, class_id: u64, data: &[u8]) {
         let req = MedusaRequest {
-            req_type,
-            class_id,
+            req_type: RequestType::Update,
+            class_id: object.header.id,
             id: self.get_new_request_id(),
-            data,
+            data: &object.pack_attributes(),
         };
 
         self.sender
             .send(Arc::from(req.to_vec()))
             .expect("channel is disconnected");
+    }
+
+    pub fn fetch_object(&self, object: MedusaClass) -> FetchAnswer {
+        let req = MedusaRequest {
+            req_type: RequestType::Fetch,
+            class_id: object.header.id,
+            id: self.get_new_request_id(),
+            data: &object.pack_attributes(),
+        };
+
+        let (sender, receiver) = bounded(std::mem::size_of::<FetchAnswer>());
+        self.fetch_requests.insert(req.id, sender);
+
+        self.sender
+            .send(Arc::from(req.to_vec()))
+            .expect("channel is disconnected");
+
+        receiver.recv().expect("channel is disconnected")
     }
 
     fn get_new_request_id(&self) -> u64 {

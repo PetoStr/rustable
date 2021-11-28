@@ -79,10 +79,10 @@ pub(crate) trait ReadChannel {
         self.read_exact(&mut buf)?;
         let (_, (class_id, msg_seq)) = parser::parse_fetch_answer_stage0(&buf).unwrap();
 
-        let class = classes
+        let data_len = classes
             .get(&class_id)
+            .map(|c| c.header.size as usize)
             .unwrap_or_else(|| panic!("Unknown class with id {:x}", class_id));
-        let data_len = class.header.size as usize;
 
         let mut buf = vec![0; data_len];
         self.read_exact(&mut buf)?;

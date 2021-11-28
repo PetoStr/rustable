@@ -292,7 +292,10 @@ impl<R: Read> Connection<R> {
 
     fn handle_fetch_answer(&mut self) -> io::Result<()> {
         let ans = self.channel.read_fetch_answer(&self.context.classes)?;
-        println!("fetch_answer = {:#?}", ans);
+        match self.context.fetch_requests.remove(&ans.msg_seq) {
+            Some((_, sender)) => sender.send(ans).expect("channel is disconnected"),
+            None => println!("ignored fetch answer = {:#?}", ans),
+        }
 
         Ok(())
     }
