@@ -40,6 +40,10 @@ const _MED_COMM_TYPE_STRING: u8 = 0x03;
 const _MED_COMM_TYPE_BITMAP: u8 = 0x04;
 const _MED_COMM_TYPE_BYTES: u8 = 0x05;
 
+const MEDUSA_VS: usize = 8;
+const MEDUSA_VS_MASK: usize = MEDUSA_VS - 1;
+const MEDUSA_VS_ATTR_NAME: &str = "vs";
+
 #[derive(Default, Clone, Copy)]
 pub struct MedusaClassHeader {
     id: u64,
@@ -60,6 +64,23 @@ pub struct MedusaClass {
 }
 
 impl MedusaClass {
+    // TODO custom errors
+    pub fn add_vs(&mut self, n: usize) {
+        let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME);
+        vs[n / MEDUSA_VS] |= 1 << (n & MEDUSA_VS_MASK);
+    }
+
+    // TODO custom errors
+    pub fn remove_vs(&mut self, n: usize) {
+        let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME);
+        vs[n / MEDUSA_VS] &= !(1 << (n & MEDUSA_VS_MASK));
+    }
+
+    pub fn clear_vs(&mut self) {
+        let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME);
+        vs.fill(0);
+    }
+
     // TODO set_attribute_{unsigned,signed,string,bitmap,bytes}
     pub fn set_attribute(&mut self, attr_name: &str, data: Vec<u8>) {
         self.attributes.set(attr_name, data);
@@ -165,6 +186,16 @@ impl MedusaAttributes {
             .unwrap_or_else(|| panic!("no attribute {}", attr_name));
 
         &attr.data
+    }
+
+    fn get_mut(&mut self, attr_name: &str) -> &mut [u8] {
+        let attr = self
+            .inner
+            .iter_mut()
+            .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does, maybe LinkedHashMap?
+            .unwrap_or_else(|| panic!("no attribute {}", attr_name));
+
+        &mut attr.data
     }
 
     fn set_from_raw(&mut self, raw_data: &[u8]) {
