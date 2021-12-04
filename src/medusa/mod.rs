@@ -1,6 +1,6 @@
 use crate::cstr_to_string;
 use crossbeam_channel::{bounded, Sender};
-use dashmap::mapref::one::{Ref, RefMut};
+use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
 use std::num::NonZeroU64;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -40,7 +40,7 @@ const _MED_COMM_TYPE_STRING: u8 = 0x03;
 const _MED_COMM_TYPE_BITMAP: u8 = 0x04;
 const _MED_COMM_TYPE_BYTES: u8 = 0x05;
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Copy)]
 pub struct MedusaClassHeader {
     id: u64,
     size: i16,
@@ -83,6 +83,14 @@ impl MedusaClass {
         &attr.data
     }
 
+    fn set_attributes_from_raw(&mut self, raw_data: &[u8]) {
+        for attr in self.attributes.iter_mut() {
+            let offset = attr.header.offset as usize;
+            let length = attr.header.length as usize;
+            attr.data = raw_data[offset..][..length].to_vec();
+        }
+    }
+
     fn pack_attributes(&self) -> Vec<u8> {
         let mut res = vec![0; self.header.size as usize];
 
@@ -99,7 +107,7 @@ impl MedusaClass {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Copy)]
 pub struct MedusaAttributeHeader {
     offset: i16,
     length: i16, // size in bytes
@@ -235,8 +243,8 @@ pub enum MedusaAnswer {
 pub struct AuthRequestData {
     pub request_id: u64,
     pub evtype_id: u64,
-    pub subject_id: u64,
-    pub object_id: Option<NonZeroU64>,
+    pub subject: MedusaClass,
+    pub object: Option<MedusaClass>,
 }
 
 #[derive(Clone)]
@@ -260,20 +268,14 @@ impl SharedContext {
         }
     }
 
-    pub fn class(&self, class_id: &u64) -> Option<Ref<'_, u64, MedusaClass>> {
+    // class with empty attribute data
+    pub fn empty_class(&self, class_id: &u64) -> Option<Ref<'_, u64, MedusaClass>> {
         self.classes.get(class_id)
     }
 
-    pub fn class_mut(&self, class_id: &u64) -> Option<RefMut<'_, u64, MedusaClass>> {
-        self.classes.get_mut(class_id)
-    }
-
-    pub fn evtype(&self, ev_id: &u64) -> Option<Ref<'_, u64, MedusaEvtype>> {
+    // evtype with empty attribute data
+    pub fn empty_evtype(&self, ev_id: &u64) -> Option<Ref<'_, u64, MedusaEvtype>> {
         self.evtypes.get(ev_id)
-    }
-
-    pub fn evtype_mut(&self, ev_id: &u64) -> Option<RefMut<'_, u64, MedusaEvtype>> {
-        self.evtypes.get_mut(ev_id)
     }
 
     pub fn update_object(&self, object: &MedusaClass) {
@@ -289,7 +291,7 @@ impl SharedContext {
             .expect("channel is disconnected");
     }
 
-    pub fn fetch_object(&self, object: MedusaClass) -> FetchAnswer {
+    pub fn fetch_object(&self, object: &MedusaClass) -> FetchAnswer {
         let req = MedusaRequest {
             req_type: RequestType::Fetch,
             class_id: object.header.id,

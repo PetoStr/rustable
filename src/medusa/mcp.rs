@@ -148,7 +148,7 @@ impl<R: Read> Connection<R> {
     fn acquire_auth_req_data(&mut self, id: u64) -> io::Result<AuthRequestData> {
         println!("Medusa auth request, id = 0x{:x}", id);
 
-        let acctype = self.context.evtype(&id).expect("Unknown access type");
+        let acctype = self.context.empty_evtype(&id).expect("Unknown access type");
         println!("acctype name = {}", acctype.name());
 
         let request_id = self.channel.read_u64()?;
@@ -157,7 +157,10 @@ impl<R: Read> Connection<R> {
         let evid = self.channel.read_u64()?;
         println!("evid = 0x{:x}", evid);
 
-        let evtype = self.context.evtype(&evid).expect("Unknown event type");
+        let evtype = self
+            .context
+            .empty_evtype(&evid)
+            .expect("Unknown event type");
         println!("evtype name = {}", evtype.name());
 
         println!("acctype.size = {}", { acctype.size });
@@ -176,38 +179,43 @@ impl<R: Read> Connection<R> {
         let ev_obj = acctype.ev_obj;
 
         // subject type
-        let mut sub_type = self
+        let mut subject = self
             .context
-            .class_mut(&ev_sub)
-            .expect("Unknown subject type");
-        println!("sub_type name = {}", sub_type.header.name());
+            .empty_class(&ev_sub)
+            .expect("Unknown subject type")
+            .clone();
+        println!("sub_type name = {}", subject.header.name());
 
         // there seems to be padding so store into buffer first
-        let mut sub = vec![0; sub_type.header.size as usize];
-        self.channel.read_exact(&mut sub)?;
-
-        for attr in &mut sub_type.attributes {
-            let new_data =
-                sub[attr.header.offset as usize..][..attr.header.length as usize].to_vec();
-            attr.data = new_data;
-        }
-        drop(sub_type); // prevent deadlock by releasing write lock early
+        let mut sub_attrs_raw = vec![0; subject.header.size as usize];
+        self.channel.read_exact(&mut sub_attrs_raw)?;
+        subject.set_attributes_from_raw(&sub_attrs_raw);
 
         // object type
-        if let Some(ev_obj) = ev_obj.map(|x| x.get()) {
-            let obj_type = self.context.class(&ev_obj).expect("Unknown object type");
-            println!("obj_type name = {}", obj_type.header.name());
+        let object = match ev_obj.map(|x| x.get()) {
+            Some(ev_obj) => {
+                let object = self
+                    .context
+                    .empty_class(&ev_obj)
+                    .expect("Unknown object type")
+                    .clone();
+                println!("obj_type name = {}", object.header.name());
 
-            let mut obj = vec![0; obj_type.header.size as usize];
-            self.channel.read_exact(&mut obj)?;
-            println!("obj = {:?}", obj);
-        }
+                let mut obj_attrs_raw = vec![0; object.header.size as usize];
+                self.channel.read_exact(&mut obj_attrs_raw)?;
+                println!("obj = {:?}", obj_attrs_raw);
+                subject.set_attributes_from_raw(&obj_attrs_raw);
+
+                Some(object)
+            }
+            None => None,
+        };
 
         Ok(AuthRequestData {
             request_id,
             evtype_id: evid,
-            subject_id: ev_sub,
-            object_id: ev_obj,
+            subject,
+            object,
         })
     }
 
@@ -245,8 +253,14 @@ impl<R: Read> Connection<R> {
         println!("evtype name = {}", evtype.name());
         println!("sub = 0x{:x}, obj = 0x{:x}", ev_sub, ev_obj);
 
-        let sub_type = self.context.class(&ev_sub).expect("Unknown subject type");
-        let obj_type = self.context.class(&ev_obj).expect("Unknown object type");
+        let sub_type = self
+            .context
+            .empty_class(&ev_sub)
+            .expect("Unknown subject type");
+        let obj_type = self
+            .context
+            .empty_class(&ev_obj)
+            .expect("Unknown object type");
         println!(
             "sub name = {}, obj name = {}",
             sub_type.header.name(),
@@ -283,7 +297,7 @@ impl<R: Read> Connection<R> {
         println!(
             "class = {:?}",
             self.context
-                .class(&{ ans.class_id })
+                .empty_class(&{ ans.class_id })
                 .map(|c| c.header.name())
         );
 

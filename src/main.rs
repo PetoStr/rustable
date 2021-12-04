@@ -15,17 +15,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     connection.poll_loop(|context: &SharedContext, auth_data: AuthRequestData| {
         let evtype = context
-            .evtype(&auth_data.evtype_id)
+            .empty_evtype(&auth_data.evtype_id)
             .expect("Unknown event")
             .name();
 
-        let to_fetch = context.class(&auth_data.subject_id).unwrap().clone();
-        println!("sample fetch: {:?}", context.fetch_object(to_fetch));
+        let mut subject = auth_data.subject;
+
+        println!("sample fetch: {:?}", context.fetch_object(&subject));
 
         if evtype == "getfile" || evtype == "getprocess" {
-            let mut subject = context.class_mut(&auth_data.subject_id).unwrap();
-            // Critical section, do not fetch objects, because write lock is being used.
-            // TODO This is an issue, becase objects are currently tied to classes in 1:1 relation.
             println!("vs = {:?}", subject.get_attribute("vs"));
 
             subject.set_attribute("med_oact", vec![]);
@@ -34,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             context.update_object(&subject);
-        } // Critical section ends here.
+        }
 
         MedusaAnswer::Ok
     })?;
