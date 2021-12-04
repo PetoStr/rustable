@@ -56,53 +56,22 @@ impl MedusaClassHeader {
 #[derive(Default, Clone)]
 pub struct MedusaClass {
     header: MedusaClassHeader,
-    attributes: Vec<MedusaAttribute>,
+    attributes: MedusaAttributes,
 }
 
 impl MedusaClass {
     // TODO set_attribute_{unsigned,signed,string,bitmap,bytes}
     pub fn set_attribute(&mut self, attr_name: &str, data: Vec<u8>) {
-        let name = self.header.name();
-        let mut attr = self
-            .attributes
-            .iter_mut()
-            .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does, maybe LinkedHashMap?
-            .unwrap_or_else(|| panic!("{} has no attribute {}", name, attr_name));
-
-        attr.data = data;
+        self.attributes.set(attr_name, data);
     }
 
-    pub fn get_attribute(&mut self, attr_name: &str) -> &[u8] {
-        let name = self.header.name();
-        let attr = self
-            .attributes
-            .iter()
-            .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does, maybe LinkedHashMap?
-            .unwrap_or_else(|| panic!("{} has no attribute {}", name, attr_name));
-
-        &attr.data
-    }
-
-    fn set_attributes_from_raw(&mut self, raw_data: &[u8]) {
-        for attr in self.attributes.iter_mut() {
-            let offset = attr.header.offset as usize;
-            let length = attr.header.length as usize;
-            attr.data = raw_data[offset..][..length].to_vec();
-        }
+    pub fn get_attribute(&self, attr_name: &str) -> &[u8] {
+        self.attributes.get(attr_name)
     }
 
     fn pack_attributes(&self) -> Vec<u8> {
         let mut res = vec![0; self.header.size as usize];
-
-        for attribute in &self.attributes {
-            let data = attribute.pack_data();
-
-            // TODO make faster, `slice::copy_from_slice()` did not work
-            for i in 0..attribute.header.length as usize {
-                res[attribute.header.offset as usize + i] = data[i];
-            }
-        }
-
+        self.attributes.pack(&mut res);
         res
     }
 }
@@ -138,9 +107,8 @@ impl MedusaAttribute {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-#[repr(packed)]
-pub struct MedusaEvtype {
+#[derive(Default, Clone, Copy, Debug)]
+pub struct MedusaEvtypeHeader {
     evid: u64,
     size: u16,
     actbit: u16,
@@ -149,12 +117,77 @@ pub struct MedusaEvtype {
     ev_obj: Option<NonZeroU64>,
     name: [u8; MEDUSA_COMM_EVNAME_MAX],
     ev_name: [[u8; MEDUSA_COMM_ATTRNAME_MAX]; 2],
-    // TODO attributes
+}
+
+impl MedusaEvtypeHeader {
+    pub fn name(&self) -> String {
+        cstr_to_string(&self.name)
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct MedusaEvtype {
+    header: MedusaEvtypeHeader,
+    attributes: MedusaAttributes,
 }
 
 impl MedusaEvtype {
+    pub fn get_attribute(&self, attr_name: &str) -> &[u8] {
+        self.attributes.get(attr_name)
+    }
+
     pub fn name(&self) -> String {
-        cstr_to_string(&self.name)
+        self.header.name()
+    }
+}
+
+#[derive(Default, Clone)]
+struct MedusaAttributes {
+    inner: Vec<MedusaAttribute>,
+}
+
+impl MedusaAttributes {
+    fn set(&mut self, attr_name: &str, data: Vec<u8>) {
+        let mut attr = self
+            .inner
+            .iter_mut()
+            .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does, maybe LinkedHashMap?
+            .unwrap_or_else(|| panic!("no attribute {}", attr_name));
+
+        attr.data = data;
+    }
+
+    fn get(&self, attr_name: &str) -> &[u8] {
+        let attr = self
+            .inner
+            .iter()
+            .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does, maybe LinkedHashMap?
+            .unwrap_or_else(|| panic!("no attribute {}", attr_name));
+
+        &attr.data
+    }
+
+    fn set_from_raw(&mut self, raw_data: &[u8]) {
+        for attr in self.inner.iter_mut() {
+            let offset = attr.header.offset as usize;
+            let length = attr.header.length as usize;
+            attr.data = raw_data[offset..][..length].to_vec();
+        }
+    }
+
+    fn pack(&self, res: &mut [u8]) {
+        for attribute in &self.inner {
+            let data = attribute.pack_data();
+
+            // TODO make faster, `slice::copy_from_slice()` did not work
+            for i in 0..attribute.header.length as usize {
+                res[attribute.header.offset as usize + i] = data[i];
+            }
+        }
+    }
+
+    fn push(&mut self, attribute: MedusaAttribute) {
+        self.inner.push(attribute);
     }
 }
 
@@ -242,7 +275,7 @@ pub enum MedusaAnswer {
 #[derive(Clone)]
 pub struct AuthRequestData {
     pub request_id: u64,
-    pub evtype_id: u64,
+    pub evtype: MedusaEvtype,
     pub subject: MedusaClass,
     pub object: Option<MedusaClass>,
 }

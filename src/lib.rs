@@ -3,7 +3,7 @@ extern crate lazy_static;
 
 pub mod medusa;
 
-fn cstr_to_string(name: &[u8]) -> String {
+pub fn cstr_to_string(name: &[u8]) -> String {
     let vec = name
         .iter()
         .copied()

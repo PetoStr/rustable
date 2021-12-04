@@ -21,7 +21,7 @@ pub fn parse_class_header(i: &[u8]) -> IResult<&[u8], MedusaClassHeader> {
     ))
 }
 
-pub fn parse_evtype(i: &[u8]) -> IResult<&[u8], MedusaEvtype> {
+pub fn parse_evtype_header(i: &[u8]) -> IResult<&[u8], MedusaEvtypeHeader> {
     let (i, evid) = le_u64(i)?;
     let (i, size) = le_u16(i)?;
     let (i, actbit) = le_u16(i)?;
@@ -32,7 +32,7 @@ pub fn parse_evtype(i: &[u8]) -> IResult<&[u8], MedusaEvtype> {
     let (i, ev_name2) = take(MEDUSA_COMM_ATTRNAME_MAX)(i)?;
     Ok((
         i,
-        MedusaEvtype {
+        MedusaEvtypeHeader {
             evid,
             size,
             actbit,

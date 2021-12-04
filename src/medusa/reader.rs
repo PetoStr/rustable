@@ -32,10 +32,13 @@ pub(crate) trait ReadChannel {
     }
 
     fn read_evtype(&mut self) -> io::Result<MedusaEvtype> {
-        let mut buf = [0; std::mem::size_of::<MedusaEvtype>()];
+        let mut buf = [0; std::mem::size_of::<MedusaEvtypeHeader>()];
         self.read_exact(&mut buf)?;
-        let (_, evtype) = parser::parse_evtype(&buf).unwrap();
-        Ok(evtype)
+        let (_, header) = parser::parse_evtype_header(&buf).unwrap();
+        Ok(MedusaEvtype {
+            header,
+            ..Default::default()
+        })
     }
 
     fn read_attribute_header(&mut self) -> io::Result<MedusaAttributeHeader> {

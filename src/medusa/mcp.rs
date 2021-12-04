@@ -148,35 +148,22 @@ impl<R: Read> Connection<R> {
     fn acquire_auth_req_data(&mut self, id: u64) -> io::Result<AuthRequestData> {
         println!("Medusa auth request, id = 0x{:x}", id);
 
-        let acctype = self.context.empty_evtype(&id).expect("Unknown access type");
-        println!("acctype name = {}", acctype.name());
+        let mut evtype = self
+            .context
+            .empty_evtype(&id)
+            .expect("Unknown access type")
+            .clone();
 
         let request_id = self.channel.read_u64()?;
         println!("request_id = 0x{:x}", request_id);
+        println!("evtype name = {}", evtype.header.name());
 
-        let evid = self.channel.read_u64()?;
-        println!("evid = 0x{:x}", evid);
+        let mut ev_attrs_raw = vec![0; evtype.header.size as usize];
+        self.channel.read_exact(&mut ev_attrs_raw)?;
+        evtype.attributes.set_from_raw(&ev_attrs_raw);
 
-        let evtype = self
-            .context
-            .empty_evtype(&evid)
-            .expect("Unknown event type");
-        println!("evtype name = {}", evtype.name());
-
-        println!("acctype.size = {}", { acctype.size });
-
-        let evbuf = if acctype.size > 8 {
-            let mut buf = vec![0; acctype.size as usize - 8];
-            self.channel.read_exact(&mut buf)?;
-            buf
-        } else {
-            vec![]
-        };
-        println!("evbuf_len = {:?}", evbuf.len());
-        println!("evbuf = {:?}", evbuf);
-
-        let ev_sub = acctype.ev_sub;
-        let ev_obj = acctype.ev_obj;
+        let ev_sub = evtype.header.ev_sub;
+        let ev_obj = evtype.header.ev_obj;
 
         // subject type
         let mut subject = self
@@ -189,7 +176,7 @@ impl<R: Read> Connection<R> {
         // there seems to be padding so store into buffer first
         let mut sub_attrs_raw = vec![0; subject.header.size as usize];
         self.channel.read_exact(&mut sub_attrs_raw)?;
-        subject.set_attributes_from_raw(&sub_attrs_raw);
+        subject.attributes.set_from_raw(&sub_attrs_raw);
 
         // object type
         let object = match ev_obj.map(|x| x.get()) {
@@ -204,7 +191,7 @@ impl<R: Read> Connection<R> {
                 let mut obj_attrs_raw = vec![0; object.header.size as usize];
                 self.channel.read_exact(&mut obj_attrs_raw)?;
                 println!("obj = {:?}", obj_attrs_raw);
-                subject.set_attributes_from_raw(&obj_attrs_raw);
+                subject.attributes.set_from_raw(&obj_attrs_raw);
 
                 Some(object)
             }
@@ -213,7 +200,7 @@ impl<R: Read> Connection<R> {
 
         Ok(AuthRequestData {
             request_id,
-            evtype_id: evid,
+            evtype,
             subject,
             object,
         })
@@ -247,10 +234,14 @@ impl<R: Read> Connection<R> {
 
     fn register_evtype(&mut self) -> io::Result<()> {
         let mut evtype = self.channel.read_evtype()?;
-        let ev_sub = evtype.ev_sub;
-        let ev_obj = evtype.ev_obj.expect("ev_obj is 0").get(); // should always be non-zero from medusa
+        let ev_sub = evtype.header.ev_sub;
+        let ev_obj = evtype.header.ev_obj.expect("ev_obj is 0").get(); // should always be non-zero from medusa
 
-        println!("evtype name = {}", evtype.name());
+        println!(
+            "evtype name = {}, size = {}",
+            evtype.header.name(),
+            evtype.header.size
+        );
         println!("sub = 0x{:x}, obj = 0x{:x}", ev_sub, ev_obj);
 
         let sub_type = self
@@ -268,25 +259,32 @@ impl<R: Read> Connection<R> {
         );
         println!(
             "ev_name0 = {}, ev_name1 = {}",
-            cstr_to_string(&evtype.ev_name[0]),
-            cstr_to_string(&evtype.ev_name[1])
+            cstr_to_string(&evtype.header.ev_name[0]),
+            cstr_to_string(&evtype.header.ev_name[1])
         );
-        println!("actbit = 0x{:x}", { evtype.actbit });
+        println!("actbit = 0x{:x}", { evtype.header.actbit });
 
-        if ev_sub == ev_obj && evtype.ev_name[0] == evtype.ev_name[1] {
-            evtype.ev_obj = None;
-            evtype.ev_name[1] = [0; MEDUSA_COMM_ATTRNAME_MAX];
+        if ev_sub == ev_obj && evtype.header.ev_name[0] == evtype.header.ev_name[1] {
+            evtype.header.ev_obj = None;
+            evtype.header.ev_name[1] = [0; MEDUSA_COMM_ATTRNAME_MAX];
         }
 
         let attrs = self.channel.read_attributes()?;
         print!("attributes:");
         for attr in attrs {
-            print!(" {}", attr.header.name());
+            print!(
+                "  attr={}, offset={}, type={:x}, len={}",
+                attr.header.name(),
+                attr.header.offset,
+                attr.header.r#type as u16,
+                attr.header.length
+            );
+            evtype.attributes.push(attr);
         }
         println!();
 
-        println!("evid = 0x{:x}", { evtype.evid });
-        self.context.evtypes.insert(evtype.evid, evtype);
+        println!("evid = 0x{:x}", { evtype.header.evid });
+        self.context.evtypes.insert(evtype.header.evid, evtype);
 
         Ok(())
     }

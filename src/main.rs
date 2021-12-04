@@ -14,20 +14,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut connection = Connection::new(write_handle, read_handle)?;
 
     connection.poll_loop(|context: &SharedContext, auth_data: AuthRequestData| {
-        let evtype = context
-            .empty_evtype(&auth_data.evtype_id)
-            .expect("Unknown event")
-            .name();
-
+        let evtype = auth_data.evtype;
+        let evtype_name = evtype.name();
         let mut subject = auth_data.subject;
 
         println!("sample fetch: {:?}", context.fetch_object(&subject));
 
-        if evtype == "getfile" || evtype == "getprocess" {
+        if evtype_name == "getfile" || evtype_name == "getprocess" {
             println!("vs = {:?}", subject.get_attribute("vs"));
+            if evtype_name == "getfile" {
+                let filename = rustable::cstr_to_string(evtype.get_attribute("filename"));
+                println!("filename: `{}`\n", filename);
+            }
 
             subject.set_attribute("med_oact", vec![]);
-            if evtype == "getprocess" {
+            if evtype_name == "getprocess" {
                 subject.set_attribute("med_sact", vec![]);
             }
 
