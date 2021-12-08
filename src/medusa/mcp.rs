@@ -233,10 +233,11 @@ impl<R: Read> Connection<R> {
         let mut evtype = self.channel.read_evtype()?;
         let ev_sub = evtype.header.ev_sub;
         let ev_obj = evtype.header.ev_obj.expect("ev_obj is 0").get(); // should always be non-zero from medusa
+        let name = evtype.header.name();
 
         println!(
             "evtype name = {}, size = {}",
-            evtype.header.name(),
+            name,
             evtype.header.size
         );
         println!("sub = 0x{:x}, obj = 0x{:x}", ev_sub, ev_obj);
@@ -281,6 +282,7 @@ impl<R: Read> Connection<R> {
         println!();
 
         println!("evid = 0x{:x}", { evtype.header.evid });
+        self.context.evtype_id.insert(name, evtype.header.evid);
         self.context.evtypes.insert(evtype.header.evid, evtype);
 
         Ok(())
