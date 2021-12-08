@@ -64,13 +64,11 @@ pub struct MedusaClass {
 }
 
 impl MedusaClass {
-    // TODO custom errors
     pub fn add_vs(&mut self, n: usize) {
         let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME);
         vs[n / MEDUSA_VS] |= 1 << (n & MEDUSA_VS_MASK);
     }
 
-    // TODO custom errors
     pub fn remove_vs(&mut self, n: usize) {
         let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME);
         vs[n / MEDUSA_VS] &= !(1 << (n & MEDUSA_VS_MASK));
@@ -317,6 +315,9 @@ pub struct SharedContext {
     evtypes: Arc<DashMap<u64, MedusaEvtype>>,
     fetch_requests: Arc<DashMap<u64, Sender<FetchAnswer>>>,
 
+    class_id: Arc<DashMap<String, u64>>,
+    evtype_id: Arc<DashMap<String, u64>>,
+
     sender: Sender<Arc<[u8]>>,
     request_id_cn: Arc<AtomicU64>,
 }
@@ -327,19 +328,39 @@ impl SharedContext {
             classes: Arc::new(DashMap::new()),
             evtypes: Arc::new(DashMap::new()),
             fetch_requests: Arc::new(DashMap::new()),
+            class_id: Arc::new(DashMap::new()),
+            evtype_id: Arc::new(DashMap::new()),
             sender,
             request_id_cn: Arc::new(AtomicU64::new(111)),
         }
     }
 
+    pub fn class_id_from_name(&self, class_name: &str) -> Option<u64> {
+        self.class_id.get(class_name).map(|x| *x)
+    }
+
+    pub fn evtype_id_from_name(&self, evtype_name: &str) -> Option<u64> {
+        self.evtype_id.get(evtype_name).map(|x| *x)
+    }
+
     // class with empty attribute data
-    pub fn empty_class(&self, class_id: &u64) -> Option<Ref<'_, u64, MedusaClass>> {
+    pub fn empty_class_from_id(&self, class_id: &u64) -> Option<Ref<'_, u64, MedusaClass>> {
         self.classes.get(class_id)
     }
 
     // evtype with empty attribute data
-    pub fn empty_evtype(&self, ev_id: &u64) -> Option<Ref<'_, u64, MedusaEvtype>> {
-        self.evtypes.get(ev_id)
+    pub fn empty_evtype_from_id(&self, evtype_id: &u64) -> Option<Ref<'_, u64, MedusaEvtype>> {
+        self.evtypes.get(evtype_id)
+    }
+
+    pub fn empty_class(&self, class_name: &str) -> Option<Ref<'_, u64, MedusaClass>> {
+        let class_id = self.class_id_from_name(class_name)?;
+        self.empty_class_from_id(&class_id)
+    }
+
+    pub fn empty_evtype(&self, evtype_name: &str) -> Option<Ref<'_, u64, MedusaEvtype>> {
+        let evtype_id = self.evtype_id_from_name(evtype_name)?;
+        self.empty_evtype_from_id(&evtype_id)
     }
 
     pub fn update_object(&self, object: &MedusaClass) {

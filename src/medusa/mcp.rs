@@ -32,8 +32,6 @@ pub struct Connection<R: Read> {
 
     pool: Option<ThreadPool>,
     write_worker: WriteWorker,
-
-    class_id: HashMap<String, u64>,
 }
 
 impl<R: Read> Connection<R> {
@@ -66,7 +64,6 @@ impl<R: Read> Connection<R> {
             pool: Some(pool),
             write_worker,
             context,
-            class_id: HashMap::new(),
         })
     }
 
@@ -150,7 +147,7 @@ impl<R: Read> Connection<R> {
 
         let mut evtype = self
             .context
-            .empty_evtype(&id)
+            .empty_evtype_from_id(&id)
             .expect("Unknown access type")
             .clone();
 
@@ -168,7 +165,7 @@ impl<R: Read> Connection<R> {
         // subject type
         let mut subject = self
             .context
-            .empty_class(&ev_sub)
+            .empty_class_from_id(&ev_sub)
             .expect("Unknown subject type")
             .clone();
         println!("sub_type name = {}", subject.header.name());
@@ -183,7 +180,7 @@ impl<R: Read> Connection<R> {
             Some(ev_obj) => {
                 let object = self
                     .context
-                    .empty_class(&ev_obj)
+                    .empty_class_from_id(&ev_obj)
                     .expect("Unknown object type")
                     .clone();
                 println!("obj_type name = {}", object.header.name());
@@ -226,7 +223,7 @@ impl<R: Read> Connection<R> {
         }
         println!();
 
-        self.class_id.insert(name, class.header.id);
+        self.context.class_id.insert(name, class.header.id);
         self.context.classes.insert(class.header.id, class);
 
         Ok(())
@@ -246,11 +243,11 @@ impl<R: Read> Connection<R> {
 
         let sub_type = self
             .context
-            .empty_class(&ev_sub)
+            .empty_class_from_id(&ev_sub)
             .expect("Unknown subject type");
         let obj_type = self
             .context
-            .empty_class(&ev_obj)
+            .empty_class_from_id(&ev_obj)
             .expect("Unknown object type");
         println!(
             "sub name = {}, obj name = {}",
@@ -295,7 +292,7 @@ impl<R: Read> Connection<R> {
         println!(
             "class = {:?}",
             self.context
-                .empty_class(&{ ans.class_id })
+                .empty_class_from_id(&{ ans.class_id })
                 .map(|c| c.header.name())
         );
 
