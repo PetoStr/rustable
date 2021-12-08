@@ -277,6 +277,7 @@ impl DecisionAnswer {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 #[repr(packed)]
 pub struct UpdateAnswer {
@@ -285,6 +286,7 @@ pub struct UpdateAnswer {
     status: i32,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct FetchAnswer {
     class_id: u64,
