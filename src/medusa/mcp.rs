@@ -288,13 +288,10 @@ impl<R: Read> Connection<R> {
 
     fn handle_update_answer(&mut self) -> io::Result<()> {
         let ans = self.channel.read_update_answer()?;
-        println!("{:#?}", ans);
-        println!(
-            "class = {:?}",
-            self.context
-                .empty_class_from_id(&{ ans.class_id })
-                .map(|c| c.header.name())
-        );
+        match self.context.update_requests.remove(&{ ans.msg_seq }) {
+            Some((_, sender)) => sender.send(ans).expect("channel is disconnected"),
+            None => println!("ignored update answer = {:#?}", ans),
+        }
 
         Ok(())
     }

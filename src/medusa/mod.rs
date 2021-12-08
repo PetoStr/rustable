@@ -313,7 +313,9 @@ pub struct AuthRequestData {
 pub struct SharedContext {
     classes: Arc<DashMap<u64, MedusaClass>>,
     evtypes: Arc<DashMap<u64, MedusaEvtype>>,
+
     fetch_requests: Arc<DashMap<u64, Sender<FetchAnswer>>>,
+    update_requests: Arc<DashMap<u64, Sender<UpdateAnswer>>>,
 
     class_id: Arc<DashMap<String, u64>>,
     evtype_id: Arc<DashMap<String, u64>>,
@@ -328,6 +330,7 @@ impl SharedContext {
             classes: Arc::new(DashMap::new()),
             evtypes: Arc::new(DashMap::new()),
             fetch_requests: Arc::new(DashMap::new()),
+            update_requests: Arc::new(DashMap::new()),
             class_id: Arc::new(DashMap::new()),
             evtype_id: Arc::new(DashMap::new()),
             sender,
@@ -363,7 +366,7 @@ impl SharedContext {
         self.empty_evtype_from_id(&evtype_id)
     }
 
-    pub fn update_object(&self, object: &MedusaClass) {
+    pub fn update_object(&self, object: &MedusaClass) -> UpdateAnswer {
         let req = MedusaRequest {
             req_type: RequestType::Update,
             class_id: object.header.id,
@@ -371,9 +374,14 @@ impl SharedContext {
             data: &object.pack_attributes(),
         };
 
+        let (sender, receiver) = bounded(std::mem::size_of::<UpdateAnswer>());
+        self.update_requests.insert(req.id, sender);
+
         self.sender
             .send(Arc::from(req.to_vec()))
             .expect("channel is disconnected");
+
+        receiver.recv().expect("channel is disconnected")
     }
 
     pub fn fetch_object(&self, object: &MedusaClass) -> FetchAnswer {

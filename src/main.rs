@@ -32,7 +32,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 subject.set_attribute("med_sact", vec![]);
             }
 
-            context.update_object(&subject);
+            let update_answer = context.update_object(&subject);
+            println!("update_answer = {:?}", update_answer);
         }
 
         MedusaAnswer::Ok
