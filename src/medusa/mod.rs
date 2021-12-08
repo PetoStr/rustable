@@ -40,9 +40,12 @@ const _MED_COMM_TYPE_STRING: u8 = 0x03;
 const _MED_COMM_TYPE_BITMAP: u8 = 0x04;
 const _MED_COMM_TYPE_BYTES: u8 = 0x05;
 
-const MEDUSA_VS: usize = 8;
-const MEDUSA_VS_MASK: usize = MEDUSA_VS - 1;
+const MEDUSA_BITMAP_BLOCK_SIZE: usize = 8;
+const MEDUSA_BITMAP_BLOCK_MASK: usize = MEDUSA_BITMAP_BLOCK_SIZE - 1;
+
 const MEDUSA_VS_ATTR_NAME: &str = "vs";
+const MEDUSA_OACT_ATTR_NAME: &str = "med_oact";
+const MEDUSA_SACT_ATTR_NAME: &str = "med_sact";
 
 #[derive(Default, Clone, Copy)]
 pub struct MedusaClassHeader {
@@ -66,17 +69,47 @@ pub struct MedusaClass {
 impl MedusaClass {
     pub fn add_vs(&mut self, n: usize) {
         let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME);
-        vs[n / MEDUSA_VS] |= 1 << (n & MEDUSA_VS_MASK);
+        vs[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
     }
 
     pub fn remove_vs(&mut self, n: usize) {
         let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME);
-        vs[n / MEDUSA_VS] &= !(1 << (n & MEDUSA_VS_MASK));
+        vs[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
     }
 
     pub fn clear_vs(&mut self) {
         let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME);
         vs.fill(0);
+    }
+
+    pub fn add_object_act(&mut self, n: usize) {
+        let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME);
+        oact[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
+    }
+
+    pub fn remove_object_act(&mut self, n: usize) {
+        let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME);
+        oact[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
+    }
+
+    pub fn clear_object_act(&mut self) {
+        let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME);
+        oact.fill(0);
+    }
+
+    pub fn add_subject_act(&mut self, n: usize) {
+        let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME);
+        sact[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
+    }
+
+    pub fn remove_subject_act(&mut self, n: usize) {
+        let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME);
+        sact[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
+    }
+
+    pub fn clear_subject_act(&mut self) {
+        let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME);
+        sact.fill(0);
     }
 
     // TODO set_attribute_{unsigned,signed,string,bitmap,bytes}

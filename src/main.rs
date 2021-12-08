@@ -27,9 +27,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("filename: `{}`\n", filename);
             }
 
-            subject.set_attribute("med_oact", vec![]);
+            subject.clear_object_act();
             if evtype_name == "getprocess" {
-                subject.set_attribute("med_sact", vec![]);
+                subject.clear_subject_act();
             }
 
             let update_answer = context.update_object(&subject);
