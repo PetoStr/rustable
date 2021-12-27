@@ -1,10 +1,10 @@
 use crate::cstr_to_string;
-use crossbeam_channel::{unbounded, Sender};
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
 use std::num::NonZeroU64;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use tokio::sync::mpsc::{self, UnboundedSender};
 
 pub mod mcp;
 pub(crate) mod parser;
@@ -397,18 +397,18 @@ pub struct SharedContext {
     classes: Arc<DashMap<u64, MedusaClass>>,
     evtypes: Arc<DashMap<u64, MedusaEvtype>>,
 
-    fetch_requests: Arc<DashMap<u64, Sender<FetchAnswer>>>,
-    update_requests: Arc<DashMap<u64, Sender<UpdateAnswer>>>,
+    fetch_requests: Arc<DashMap<u64, UnboundedSender<FetchAnswer>>>,
+    update_requests: Arc<DashMap<u64, UnboundedSender<UpdateAnswer>>>,
 
     class_id: Arc<DashMap<String, u64>>,
     evtype_id: Arc<DashMap<String, u64>>,
 
-    sender: Sender<Arc<[u8]>>,
+    sender: UnboundedSender<Arc<[u8]>>,
     request_id_cn: Arc<AtomicU64>,
 }
 
 impl SharedContext {
-    fn new(sender: Sender<Arc<[u8]>>) -> Self {
+    fn new(sender: UnboundedSender<Arc<[u8]>>) -> Self {
         Self {
             classes: Arc::new(DashMap::new()),
             evtypes: Arc::new(DashMap::new()),
@@ -449,7 +449,7 @@ impl SharedContext {
         self.empty_evtype_from_id(&evtype_id)
     }
 
-    pub fn update_object(&self, object: &MedusaClass) -> UpdateAnswer {
+    pub async fn update_object(&self, object: &MedusaClass) -> UpdateAnswer {
         let req = MedusaRequest {
             req_type: RequestType::Update,
             class_id: object.header.id,
@@ -457,17 +457,17 @@ impl SharedContext {
             data: &object.pack_attributes(),
         };
 
-        let (sender, receiver) = unbounded();
+        let (sender, mut receiver) = mpsc::unbounded_channel();
         self.update_requests.insert(req.id, sender);
 
         self.sender
             .send(Arc::from(req.to_vec()))
             .expect("channel is disconnected");
 
-        receiver.recv().expect("channel is disconnected")
+        receiver.recv().await.expect("channel is disconnected")
     }
 
-    pub fn fetch_object(&self, object: &MedusaClass) -> FetchAnswer {
+    pub async fn fetch_object(&self, object: &MedusaClass) -> FetchAnswer {
         let req = MedusaRequest {
             req_type: RequestType::Fetch,
             class_id: object.header.id,
@@ -475,14 +475,14 @@ impl SharedContext {
             data: &object.pack_attributes(),
         };
 
-        let (sender, receiver) = unbounded();
+        let (sender, mut receiver) = mpsc::unbounded_channel();
         self.fetch_requests.insert(req.id, sender);
 
         self.sender
             .send(Arc::from(req.to_vec()))
             .expect("channel is disconnected");
 
-        receiver.recv().expect("channel is disconnected")
+        receiver.recv().await.expect("channel is disconnected")
     }
 
     fn get_new_request_id(&self) -> u64 {

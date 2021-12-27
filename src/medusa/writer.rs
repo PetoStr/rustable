@@ -1,24 +1,18 @@
-use crossbeam_channel::Receiver;
-use std::io::prelude::*;
 use std::sync::Arc;
-use threadfin::{Task, ThreadPool};
+use tokio::io::AsyncWriteExt;
+use tokio::sync::mpsc::UnboundedReceiver;
 
-pub(crate) struct WriteWorker {
-    pub(crate) task: Option<Task<()>>,
-}
+pub(crate) struct WriteWorker;
 
 impl WriteWorker {
-    pub(crate) fn new<W: Write + 'static + Send>(
-        pool: &ThreadPool,
+    pub(crate) async fn spawn<W: AsyncWriteExt + Unpin + Send + 'static>(
         mut write_handle: W,
-        receiver: Receiver<Arc<[u8]>>,
-    ) -> Self {
-        let task = pool.execute(move || {
-            while let Ok(data) = receiver.recv() {
-                write_handle.write_all(data.as_ref()).unwrap();
+        mut receiver: UnboundedReceiver<Arc<[u8]>>,
+    ) {
+        tokio::spawn(async move {
+            while let Some(data) = receiver.recv().await {
+                write_handle.write_all(data.as_ref()).await.unwrap();
             }
         });
-
-        Self { task: Some(task) }
     }
 }
