@@ -1,5 +1,5 @@
 use crate::cstr_to_string;
-use crossbeam_channel::{bounded, Sender};
+use crossbeam_channel::{unbounded, Sender};
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
 use std::num::NonZeroU64;
@@ -457,7 +457,7 @@ impl SharedContext {
             data: &object.pack_attributes(),
         };
 
-        let (sender, receiver) = bounded(std::mem::size_of::<UpdateAnswer>());
+        let (sender, receiver) = unbounded();
         self.update_requests.insert(req.id, sender);
 
         self.sender
@@ -475,7 +475,7 @@ impl SharedContext {
             data: &object.pack_attributes(),
         };
 
-        let (sender, receiver) = bounded(std::mem::size_of::<FetchAnswer>());
+        let (sender, receiver) = unbounded();
         self.fetch_requests.insert(req.id, sender);
 
         self.sender
