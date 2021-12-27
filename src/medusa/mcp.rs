@@ -5,6 +5,7 @@ use crate::medusa::*;
 use std::collections::HashMap;
 use std::future::Future;
 use std::marker::Unpin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Result};
 use tokio::sync::mpsc;
@@ -29,6 +30,7 @@ pub struct Connection<R: AsyncReadExt + Unpin> {
     // channel: Box<dyn Channel<T>>,
     channel: NativeByteOrderChannel<R>,
     context: SharedContext,
+    shutdown: Arc<AtomicBool>,
 }
 
 impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
@@ -58,7 +60,11 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
 
         println!();
 
-        Ok(Self { context, channel })
+        Ok(Self {
+            context,
+            channel,
+            shutdown: Arc::new(AtomicBool::new(false)),
+        })
     }
 
     pub async fn poll_loop<F, Fut>(&mut self, auth_cb: F) -> Result<()>
@@ -67,8 +73,15 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         F: Clone + Send + Sync + 'static,
         Fut: Future<Output = MedusaAnswer> + Send,
     {
-        loop {
+        self.spawn_shutdown_handler();
+
+        while !self.shutdown.load(Ordering::SeqCst) {
             let id = self.channel.read_u64().await?;
+
+            if self.shutdown.load(Ordering::SeqCst) {
+                break;
+            }
+
             if id == 0 {
                 let cmd = self.channel.read_command().await?;
                 println!(
@@ -101,6 +114,28 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
 
             println!();
         }
+
+        Ok(())
+    }
+
+    fn spawn_shutdown_handler(&self) {
+        let context = self.context.clone();
+        let shutdown = Arc::clone(&self.shutdown);
+        tokio::spawn(async move {
+            tokio::signal::ctrl_c().await.unwrap();
+            println!("ctrl-c");
+            shutdown.store(true, Ordering::SeqCst);
+
+            let mut printk = context.empty_class("printk").unwrap().clone();
+            printk.set_attribute("message", b"Goodbye from Rustable".to_vec());
+            let req = MedusaRequest {
+                req_type: RequestType::Update,
+                class_id: printk.header.id,
+                id: 0xffffffff,
+                data: &printk.pack_attributes(),
+            };
+            context.sender.send(Arc::from(req.to_vec())).unwrap();
+        });
     }
 
     fn execute_auth_task<F, Fut>(&mut self, auth_cb: F, auth_data: AuthRequestData)
