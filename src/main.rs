@@ -1,5 +1,6 @@
+use rustable::medusa::context::SharedContext;
 use rustable::medusa::mcp::Connection;
-use rustable::medusa::{AuthRequestData, MedusaAnswer, SharedContext};
+use rustable::medusa::{AuthRequestData, MedusaAnswer};
 use tokio::fs::OpenOptions;
 
 const MEDUSA_FILE_NAME: &str = "/dev/medusa";

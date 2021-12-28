@@ -7,7 +7,7 @@ use std::mem;
 use tokio::io::{AsyncReadExt, Result};
 
 #[async_trait]
-pub(crate) trait AsyncReadChannel
+pub(crate) trait AsyncReader
 where
     Self: Unpin,
 {
@@ -102,18 +102,18 @@ where
 }
 
 // for native byte order
-pub(crate) struct NativeByteOrderChannel<R: AsyncReadExt + Unpin> {
+pub(crate) struct NativeByteOrderReader<R: AsyncReadExt + Unpin> {
     read_handle: R,
 }
 
-impl<R: AsyncReadExt + Unpin> NativeByteOrderChannel<R> {
+impl<R: AsyncReadExt + Unpin> NativeByteOrderReader<R> {
     pub(crate) fn new(read_handle: R) -> Self {
         Self { read_handle }
     }
 }
 
 #[async_trait]
-impl<R: AsyncReadExt + Unpin + Send> AsyncReadChannel for NativeByteOrderChannel<R> {
+impl<R: AsyncReadExt + Unpin + Send> AsyncReader for NativeByteOrderReader<R> {
     async fn read_exact(&mut self, buf: &mut [u8]) -> Result<usize> {
         self.read_handle.read_exact(buf).await
     }
