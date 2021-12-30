@@ -1,5 +1,6 @@
 use rustable::medusa::context::SharedContext;
 use rustable::medusa::mcp::Connection;
+use rustable::medusa::tree::Tree;
 use rustable::medusa::{AuthRequestData, MedusaAnswer};
 use tokio::fs::OpenOptions;
 
@@ -31,8 +32,30 @@ async fn process(context: SharedContext, auth_data: AuthRequestData) -> MedusaAn
     MedusaAnswer::Ok
 }
 
+#[rustfmt::skip]
+fn init_tree() -> Tree {
+    Tree::builder()
+        .begin_node("name0", "/")
+            .begin_node("name1", "usr")
+                .begin_node("name2", "bin")
+                .end_node()
+            .end_node()
+
+            .begin_node("name3", "share")
+            .end_node()
+
+            .begin_node("name4", "bin")
+            .end_node()
+
+        .end_node()
+        .build()
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let tree = init_tree();
+    println!("{:?}", tree);
+
     let write_handle = OpenOptions::new()
         .read(true)
         .write(true)

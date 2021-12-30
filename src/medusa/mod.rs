@@ -5,6 +5,7 @@ pub mod context;
 pub mod mcp;
 mod parser;
 mod reader;
+pub mod tree;
 mod writer;
 
 type Command = u32;
