@@ -188,7 +188,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         // object type
         let object = match ev_obj.map(|x| x.get()) {
             Some(ev_obj) => {
-                let object = self
+                let mut object = self
                     .context
                     .empty_class_from_id(&ev_obj)
                     .expect("Unknown object type");
@@ -197,7 +197,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
                 let mut obj_attrs_raw = vec![0; object.header.size as usize];
                 self.reader.read_exact(&mut obj_attrs_raw).await?;
                 println!("obj = {:?}", obj_attrs_raw);
-                subject.attributes.set_from_raw(&obj_attrs_raw);
+                object.attributes.set_from_raw(&obj_attrs_raw);
 
                 Some(object)
             }
