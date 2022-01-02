@@ -1,14 +1,15 @@
 use crate::cstr_to_string;
+use crate::medusa::config::Config;
 use crate::medusa::context::SharedContext;
 use crate::medusa::reader::{AsyncReader, NativeByteOrderReader};
 use crate::medusa::writer::Writer;
 use crate::medusa::*;
 use std::collections::HashMap;
-use std::future::Future;
-use std::marker::Unpin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Result};
+
+const DEFAULT_ANSWER: MedusaAnswer = MedusaAnswer::Ok;
 
 lazy_static! {
     static ref COMMS: HashMap<Command, &'static str> = {
@@ -26,6 +27,7 @@ lazy_static! {
 }
 
 pub struct Connection<R: AsyncReadExt + Unpin> {
+    config: Arc<Config>,
     // TODO endian based reader
     reader: NativeByteOrderReader<R>,
     context: SharedContext,
@@ -33,7 +35,7 @@ pub struct Connection<R: AsyncReadExt + Unpin> {
 }
 
 impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
-    pub async fn new<W>(write_handle: W, read_handle: R) -> Result<Self>
+    pub async fn new<W>(write_handle: W, read_handle: R, config: Config) -> Result<Self>
     where
         W: AsyncWriteExt + Unpin + Send + 'static,
     {
@@ -59,18 +61,14 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         println!();
 
         Ok(Self {
-            context,
+            config: Arc::new(config),
             reader,
+            context,
             shutdown: Arc::new(AtomicBool::new(false)),
         })
     }
 
-    pub async fn poll_loop<F, Fut>(&mut self, auth_cb: F) -> Result<()>
-    where
-        F: Fn(SharedContext, AuthRequestData) -> Fut,
-        F: Clone + Send + Sync + 'static,
-        Fut: Future<Output = MedusaAnswer> + Send,
-    {
+    pub async fn run(&mut self) -> Result<()> {
         self.spawn_shutdown_handler();
 
         while !self.shutdown.load(Ordering::SeqCst) {
@@ -107,7 +105,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
                 }
             } else {
                 let auth_data = self.acquire_auth_req_data(id).await?;
-                self.execute_auth_task(auth_cb.clone(), auth_data);
+                self.handle_event(auth_data);
             }
 
             println!();
@@ -136,18 +134,32 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         });
     }
 
-    fn execute_auth_task<F, Fut>(&mut self, auth_cb: F, auth_data: AuthRequestData)
-    where
-        F: Fn(SharedContext, AuthRequestData) -> Fut,
-        F: Clone + Send + Sync + 'static,
-        Fut: Future<Output = MedusaAnswer> + Send,
-    {
+    fn handle_event(&self, auth_data: AuthRequestData) {
         let context = self.context.clone();
+        let config = Arc::clone(&self.config);
+
         tokio::spawn(async move {
             let request_id = auth_data.request_id;
             let writer = Arc::clone(&context.writer);
 
-            let status = auth_cb(context, auth_data).await as u16;
+            async fn get_answer(
+                config: &Config,
+                context: SharedContext,
+                auth_data: AuthRequestData,
+            ) -> Option<MedusaAnswer> {
+                let tree = config.tree_by_event(&auth_data.evtype.name())?;
+                let path = match tree.attribute() {
+                    Some(attr) => cstr_to_string(auth_data.evtype.get_attribute(attr)),
+                    None => "/".to_owned(),
+                };
+                let handler = tree.handler_by_path(&path)?;
+
+                Some(handler.handle(context, auth_data).await)
+            }
+
+            let status = get_answer(&config, context, auth_data)
+                .await
+                .unwrap_or(DEFAULT_ANSWER) as u16;
 
             let decision = DecisionAnswer { request_id, status };
             writer.write(Arc::from(decision.to_vec()));

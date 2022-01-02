@@ -1,7 +1,9 @@
 use crate::cstr_to_string;
 use std::num::NonZeroU64;
 
+pub mod config;
 pub mod context;
+pub mod handler;
 pub mod mcp;
 mod parser;
 mod reader;
@@ -47,7 +49,7 @@ const MEDUSA_VSS_ATTR_NAME: &str = "vss";
 const MEDUSA_OACT_ATTR_NAME: &str = "med_oact";
 const MEDUSA_SACT_ATTR_NAME: &str = "med_sact";
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, Debug)]
 pub struct MedusaClassHeader {
     id: u64,
     size: i16,
@@ -60,7 +62,7 @@ impl MedusaClassHeader {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct MedusaClass {
     header: MedusaClassHeader,
     attributes: MedusaAttributes,
@@ -173,7 +175,7 @@ impl MedusaClass {
     }
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, Debug)]
 pub struct MedusaAttributeHeader {
     offset: i16,
     length: i16, // size in bytes
@@ -187,7 +189,7 @@ impl MedusaAttributeHeader {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct MedusaAttribute {
     header: MedusaAttributeHeader,
     data: Vec<u8>,
@@ -222,7 +224,7 @@ impl MedusaEvtypeHeader {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct MedusaEvtype {
     header: MedusaEvtypeHeader,
     attributes: MedusaAttributes,
@@ -238,7 +240,7 @@ impl MedusaEvtype {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 struct MedusaAttributes {
     inner: Vec<MedusaAttribute>,
 }
@@ -381,7 +383,7 @@ pub enum MedusaAnswer {
     Ok,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AuthRequestData {
     pub request_id: u64,
     pub evtype: MedusaEvtype,

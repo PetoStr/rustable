@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1.52"
 dashmap = "5.0.0"
+derivative = "2.2.0"
 lazy_static = "1.4.0"
 nom = "7.1.0"
 regex = "1.5.4"

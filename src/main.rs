@@ -1,4 +1,8 @@
+use async_trait::async_trait;
+use rustable::cstr_to_string;
+use rustable::medusa::config::Config;
 use rustable::medusa::context::SharedContext;
+use rustable::medusa::handler::EventHandler;
 use rustable::medusa::mcp::Connection;
 use rustable::medusa::tree::Tree;
 use rustable::medusa::{AuthRequestData, MedusaAnswer};
@@ -6,38 +10,58 @@ use tokio::fs::OpenOptions;
 
 const MEDUSA_FILE_NAME: &str = "/dev/medusa";
 
-async fn process(context: SharedContext, auth_data: AuthRequestData) -> MedusaAnswer {
-    let evtype = auth_data.evtype;
-    let evtype_name = evtype.name();
-    let mut subject = auth_data.subject;
+struct SampleFsHandler;
 
-    println!("sample fetch: {:?}", context.fetch_object(&subject).await);
+#[async_trait]
+impl EventHandler for SampleFsHandler {
+    async fn handle(&self, ctx: SharedContext, auth_data: AuthRequestData) -> MedusaAnswer {
+        println!("sample fs handler");
 
-    if evtype_name == "getfile" || evtype_name == "getprocess" {
-        println!("vs = {:?}", subject.get_attribute("vs"));
-        if evtype_name == "getfile" {
-            let filename = rustable::cstr_to_string(evtype.get_attribute("filename"));
-            println!("filename: `{}`\n", filename);
-        }
+        let mut subject = auth_data.subject;
+        subject.clear_object_act();
+
+        let update_answer = ctx.update_object(&subject).await;
+        println!("update_answer = {:?}\n", update_answer);
+
+        MedusaAnswer::Ok
+    }
+}
+
+struct SampleProcessHandler;
+
+#[async_trait]
+impl EventHandler for SampleProcessHandler {
+    async fn handle(&self, ctx: SharedContext, auth_data: AuthRequestData) -> MedusaAnswer {
+        println!("sample process handler");
+
+        let mut subject = auth_data.subject;
+        println!(
+            "subject cmdline = {}",
+            cstr_to_string(subject.get_attribute("cmdline"))
+        );
 
         subject.clear_object_act();
-        if evtype_name == "getprocess" {
-            subject.clear_subject_act();
-        }
+        subject.clear_subject_act();
 
-        let update_answer = context.update_object(&subject).await;
-        println!("update_answer = {:?}", update_answer);
+        let update_answer = ctx.update_object(&subject).await;
+        println!("update_answer = {:?}\n", update_answer);
+
+        MedusaAnswer::Ok
     }
-
-    MedusaAnswer::Ok
 }
 
 #[rustfmt::skip]
-fn init_tree() -> Tree {
-    Tree::builder()
+fn init_config() -> Config {
+    // TODO simplify by making a macro?
+    let fs = Tree::builder_with_attribute("getfile", "filename")
         .begin_node("name0", "/")
+            .with_handler(SampleFsHandler)
+
             .begin_node("name1", "usr")
                 .begin_node("name2", "bin")
+                    .begin_node("name2", r".*")
+                        .with_handler(SampleFsHandler)
+                    .end_node()
                 .end_node()
             .end_node()
 
@@ -48,13 +72,24 @@ fn init_tree() -> Tree {
             .end_node()
 
         .end_node()
+        .build();
+
+    let domain = Tree::builder("getprocess")
+        .begin_node("name5", r".*")
+            .with_handler(SampleProcessHandler)
+        .end_node()
+        .build();
+
+    Config::builder()
+        .add_tree(fs)
+        .add_tree(domain)
         .build()
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let tree = init_tree();
-    println!("{:?}", tree);
+    let config = init_config();
+    println!("{:?}", config);
 
     let write_handle = OpenOptions::new()
         .read(true)
@@ -63,9 +98,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     let read_handle = write_handle.try_clone().await?;
 
-    let mut connection = Connection::new(write_handle, read_handle).await?;
-
-    connection.poll_loop(process).await?;
+    let mut connection = Connection::new(write_handle, read_handle, config).await?;
+    connection.run().await?;
 
     Ok(())
 }
