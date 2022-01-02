@@ -1,8 +1,10 @@
 use crate::cstr_to_string;
+use crate::medusa::error::AttributeError;
 use std::num::NonZeroU64;
 
 pub mod config;
 pub mod context;
+pub mod error;
 pub mod handler;
 pub mod mcp;
 mod parser;
@@ -69,102 +71,138 @@ pub struct MedusaClass {
 }
 
 impl MedusaClass {
-    pub fn add_vs(&mut self, n: usize) {
-        let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME);
+    pub fn add_vs(&mut self, n: usize) -> Result<(), AttributeError> {
+        let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME)?;
         vs[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
+
+        Ok(())
     }
 
-    pub fn remove_vs(&mut self, n: usize) {
-        let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME);
+    pub fn remove_vs(&mut self, n: usize) -> Result<(), AttributeError> {
+        let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME)?;
         vs[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
+
+        Ok(())
     }
 
-    pub fn clear_vs(&mut self) {
-        let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME);
+    pub fn clear_vs(&mut self) -> Result<(), AttributeError> {
+        let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME)?;
         vs.fill(0);
+
+        Ok(())
     }
 
-    pub fn add_vs_read(&mut self, n: usize) {
-        let vsr = self.attributes.get_mut(MEDUSA_VSR_ATTR_NAME);
+    pub fn add_vs_read(&mut self, n: usize) -> Result<(), AttributeError> {
+        let vsr = self.attributes.get_mut(MEDUSA_VSR_ATTR_NAME)?;
         vsr[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
+
+        Ok(())
     }
 
-    pub fn remove_vs_read(&mut self, n: usize) {
-        let vsr = self.attributes.get_mut(MEDUSA_VSR_ATTR_NAME);
+    pub fn remove_vs_read(&mut self, n: usize) -> Result<(), AttributeError> {
+        let vsr = self.attributes.get_mut(MEDUSA_VSR_ATTR_NAME)?;
         vsr[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
+
+        Ok(())
     }
 
-    pub fn clear_vs_read(&mut self) {
-        let vsr = self.attributes.get_mut(MEDUSA_VSR_ATTR_NAME);
+    pub fn clear_vs_read(&mut self) -> Result<(), AttributeError> {
+        let vsr = self.attributes.get_mut(MEDUSA_VSR_ATTR_NAME)?;
         vsr.fill(0);
+
+        Ok(())
     }
 
-    pub fn add_vs_write(&mut self, n: usize) {
-        let vsw = self.attributes.get_mut(MEDUSA_VSW_ATTR_NAME);
+    pub fn add_vs_write(&mut self, n: usize) -> Result<(), AttributeError> {
+        let vsw = self.attributes.get_mut(MEDUSA_VSW_ATTR_NAME)?;
         vsw[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
+
+        Ok(())
     }
 
-    pub fn remove_vs_write(&mut self, n: usize) {
-        let vsw = self.attributes.get_mut(MEDUSA_VSW_ATTR_NAME);
+    pub fn remove_vs_write(&mut self, n: usize) -> Result<(), AttributeError> {
+        let vsw = self.attributes.get_mut(MEDUSA_VSW_ATTR_NAME)?;
         vsw[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
+
+        Ok(())
     }
 
-    pub fn clear_vs_write(&mut self) {
-        let vsw = self.attributes.get_mut(MEDUSA_VSW_ATTR_NAME);
+    pub fn clear_vs_write(&mut self) -> Result<(), AttributeError> {
+        let vsw = self.attributes.get_mut(MEDUSA_VSW_ATTR_NAME)?;
         vsw.fill(0);
+
+        Ok(())
     }
 
-    pub fn add_vs_see(&mut self, n: usize) {
-        let vss = self.attributes.get_mut(MEDUSA_VSS_ATTR_NAME);
+    pub fn add_vs_see(&mut self, n: usize) -> Result<(), AttributeError> {
+        let vss = self.attributes.get_mut(MEDUSA_VSS_ATTR_NAME)?;
         vss[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
+
+        Ok(())
     }
 
-    pub fn remove_vs_see(&mut self, n: usize) {
-        let vss = self.attributes.get_mut(MEDUSA_VSS_ATTR_NAME);
+    pub fn remove_vs_see(&mut self, n: usize) -> Result<(), AttributeError> {
+        let vss = self.attributes.get_mut(MEDUSA_VSS_ATTR_NAME)?;
         vss[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
+
+        Ok(())
     }
 
-    pub fn clear_vs_see(&mut self) {
-        let vss = self.attributes.get_mut(MEDUSA_VSS_ATTR_NAME);
+    pub fn clear_vs_see(&mut self) -> Result<(), AttributeError> {
+        let vss = self.attributes.get_mut(MEDUSA_VSS_ATTR_NAME)?;
         vss.fill(0);
+
+        Ok(())
     }
 
-    pub fn add_object_act(&mut self, n: usize) {
-        let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME);
+    pub fn add_object_act(&mut self, n: usize) -> Result<(), AttributeError> {
+        let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME)?;
         oact[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
+
+        Ok(())
     }
 
-    pub fn remove_object_act(&mut self, n: usize) {
-        let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME);
+    pub fn remove_object_act(&mut self, n: usize) -> Result<(), AttributeError> {
+        let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME)?;
         oact[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
+
+        Ok(())
     }
 
-    pub fn clear_object_act(&mut self) {
-        let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME);
+    pub fn clear_object_act(&mut self) -> Result<(), AttributeError> {
+        let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME)?;
         oact.fill(0);
+
+        Ok(())
     }
 
-    pub fn add_subject_act(&mut self, n: usize) {
-        let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME);
+    pub fn add_subject_act(&mut self, n: usize) -> Result<(), AttributeError> {
+        let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME)?;
         sact[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
+
+        Ok(())
     }
 
-    pub fn remove_subject_act(&mut self, n: usize) {
-        let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME);
+    pub fn remove_subject_act(&mut self, n: usize) -> Result<(), AttributeError> {
+        let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME)?;
         sact[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
+
+        Ok(())
     }
 
-    pub fn clear_subject_act(&mut self) {
-        let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME);
+    pub fn clear_subject_act(&mut self) -> Result<(), AttributeError> {
+        let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME)?;
         sact.fill(0);
+
+        Ok(())
     }
 
-    // TODO set_attribute_{unsigned,signed,string,bitmap,bytes}
-    pub fn set_attribute(&mut self, attr_name: &str, data: Vec<u8>) {
-        self.attributes.set(attr_name, data);
+    // TODO set_attribute_-> Result<(), AttributeError> {unsigned,signed,string,bitmap,bytes}
+    pub fn set_attribute(&mut self, attr_name: &str, data: Vec<u8>) -> Result<(), AttributeError> {
+        self.attributes.set(attr_name, data)
     }
 
-    pub fn get_attribute(&self, attr_name: &str) -> &[u8] {
+    pub fn get_attribute(&self, attr_name: &str) -> Result<&[u8], AttributeError> {
         self.attributes.get(attr_name)
     }
 
@@ -231,7 +269,7 @@ pub struct MedusaEvtype {
 }
 
 impl MedusaEvtype {
-    pub fn get_attribute(&self, attr_name: &str) -> &[u8] {
+    pub fn get_attribute(&self, attr_name: &str) -> Result<&[u8], AttributeError> {
         self.attributes.get(attr_name)
     }
 
@@ -246,34 +284,36 @@ struct MedusaAttributes {
 }
 
 impl MedusaAttributes {
-    fn set(&mut self, attr_name: &str, data: Vec<u8>) {
+    fn set(&mut self, attr_name: &str, data: Vec<u8>) -> Result<(), AttributeError> {
         let mut attr = self
             .inner
             .iter_mut()
             .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does, maybe LinkedHashMap?
-            .unwrap_or_else(|| panic!("no attribute {}", attr_name));
+            .ok_or_else(|| AttributeError::UnknownAttribute(attr_name.to_owned()))?;
 
         attr.data = data;
+
+        Ok(())
     }
 
-    fn get(&self, attr_name: &str) -> &[u8] {
+    fn get(&self, attr_name: &str) -> Result<&[u8], AttributeError> {
         let attr = self
             .inner
             .iter()
             .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does, maybe LinkedHashMap?
-            .unwrap_or_else(|| panic!("no attribute {}", attr_name));
+            .ok_or_else(|| AttributeError::UnknownAttribute(attr_name.to_owned()))?;
 
-        &attr.data
+        Ok(&attr.data)
     }
 
-    fn get_mut(&mut self, attr_name: &str) -> &mut [u8] {
+    fn get_mut(&mut self, attr_name: &str) -> Result<&mut [u8], AttributeError> {
         let attr = self
             .inner
             .iter_mut()
             .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does, maybe LinkedHashMap?
-            .unwrap_or_else(|| panic!("no attribute {}", attr_name));
+            .ok_or_else(|| AttributeError::UnknownAttribute(attr_name.to_owned()))?;
 
-        &mut attr.data
+        Ok(&mut attr.data)
     }
 
     fn set_from_raw(&mut self, raw_data: &[u8]) {

@@ -1,15 +1,17 @@
 use crate::cstr_to_string;
 use crate::medusa::config::Config;
 use crate::medusa::context::SharedContext;
+use crate::medusa::error::{CommunicationError, ConnectionError};
 use crate::medusa::reader::{AsyncReader, NativeByteOrderReader};
 use crate::medusa::writer::Writer;
 use crate::medusa::*;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt, Result};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const DEFAULT_ANSWER: MedusaAnswer = MedusaAnswer::Ok;
+const PROTOCOL_VERSION: u64 = 2;
 
 lazy_static! {
     static ref COMMS: HashMap<Command, &'static str> = {
@@ -35,7 +37,11 @@ pub struct Connection<R: AsyncReadExt + Unpin> {
 }
 
 impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
-    pub async fn new<W>(write_handle: W, read_handle: R, config: Config) -> Result<Self>
+    pub async fn new<W>(
+        write_handle: W,
+        read_handle: R,
+        config: Config,
+    ) -> Result<Self, ConnectionError>
     where
         W: AsyncWriteExt + Unpin + Send + 'static,
     {
@@ -52,11 +58,15 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         } else if greeting == GREETING_REVERSED_BYTE_ORDER {
             unimplemented!("reversed byte order");
         } else {
-            panic!("unknown byte order");
+            return Err(ConnectionError::UnknownByteOrder(greeting));
         }
 
         let version = reader.read_u64().await?;
         println!("protocol version {}", version);
+
+        if version != PROTOCOL_VERSION {
+            return Err(ConnectionError::UnsupportedVersion(version));
+        }
 
         println!();
 
@@ -68,7 +78,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         })
     }
 
-    pub async fn run(&mut self) -> Result<()> {
+    pub async fn run(&mut self) -> Result<(), CommunicationError> {
         self.spawn_shutdown_handler();
 
         while !self.shutdown.load(Ordering::SeqCst) {
@@ -83,7 +93,9 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
                 println!(
                     "cmd(0x{:x}) = {}",
                     cmd,
-                    COMMS.get(&cmd).unwrap_or(&"Unknown command")
+                    COMMS
+                        .get(&cmd)
+                        .ok_or(CommunicationError::UnknownCommand(cmd))?
                 );
                 match cmd {
                     MEDUSA_COMM_KCLASSDEF => {
@@ -123,7 +135,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
             shutdown.store(true, Ordering::SeqCst);
 
             let mut printk = context.empty_class("printk").unwrap();
-            printk.set_attribute("message", b"Goodbye from Rustable".to_vec());
+            let _ = printk.set_attribute("message", b"Goodbye from Rustable".to_vec());
             let req = MedusaRequest {
                 req_type: RequestType::Update,
                 class_id: printk.header.id,
@@ -148,10 +160,17 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
                 auth_data: AuthRequestData,
             ) -> Option<MedusaAnswer> {
                 let tree = config.tree_by_event(&auth_data.evtype.name())?;
-                let path = match tree.attribute() {
-                    Some(attr) => cstr_to_string(auth_data.evtype.get_attribute(attr)),
-                    None => "/".to_owned(),
-                };
+                let path = tree
+                    .attribute()
+                    .map(|attr_name| {
+                        auth_data
+                            .evtype
+                            .get_attribute(attr_name)
+                            .ok()
+                            .map(cstr_to_string)
+                    })
+                    .flatten()
+                    .unwrap_or_else(|| "/".to_owned());
                 let handler = tree.handler_by_path(&path)?;
 
                 Some(handler.handle(context, auth_data).await)
@@ -166,13 +185,16 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         });
     }
 
-    async fn acquire_auth_req_data(&mut self, id: u64) -> Result<AuthRequestData> {
+    async fn acquire_auth_req_data(
+        &mut self,
+        id: u64,
+    ) -> Result<AuthRequestData, CommunicationError> {
         println!("Medusa auth request, id = 0x{:x}", id);
 
         let mut evtype = self
             .context
             .empty_evtype_from_id(&id)
-            .expect("Unknown access type");
+            .ok_or(CommunicationError::UnknownAccessType(id))?;
 
         let request_id = self.reader.read_u64().await?;
         println!("request_id = 0x{:x}", request_id);
@@ -189,7 +211,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         let mut subject = self
             .context
             .empty_class_from_id(&ev_sub)
-            .expect("Unknown subject type");
+            .ok_or(CommunicationError::UnknownSubjectType(ev_sub))?;
         println!("sub_type name = {}", subject.header.name());
 
         // there seems to be padding so store into buffer first
@@ -203,7 +225,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
                 let mut object = self
                     .context
                     .empty_class_from_id(&ev_obj)
-                    .expect("Unknown object type");
+                    .ok_or(CommunicationError::UnknownObjectType(ev_obj))?;
                 println!("obj_type name = {}", object.header.name());
 
                 let mut obj_attrs_raw = vec![0; object.header.size as usize];
@@ -224,7 +246,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         })
     }
 
-    async fn register_class(&mut self) -> Result<()> {
+    async fn register_class(&mut self) -> Result<(), CommunicationError> {
         let mut class = self.reader.read_class().await?;
         let size = class.header.size; // copy so there's no UB when referencing packed struct field
         let name = class.header.name();
@@ -250,7 +272,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         Ok(())
     }
 
-    async fn register_evtype(&mut self) -> Result<()> {
+    async fn register_evtype(&mut self) -> Result<(), CommunicationError> {
         let mut evtype = self.reader.read_evtype().await?;
         let ev_sub = evtype.header.ev_sub;
         let ev_obj = evtype.header.ev_obj.expect("ev_obj is 0").get(); // should always be non-zero from medusa
@@ -262,11 +284,11 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         let sub_type = self
             .context
             .empty_class_from_id(&ev_sub)
-            .expect("Unknown subject type");
+            .ok_or(CommunicationError::UnknownSubjectType(ev_sub))?;
         let obj_type = self
             .context
             .empty_class_from_id(&ev_obj)
-            .expect("Unknown object type");
+            .ok_or(CommunicationError::UnknownObjectType(ev_obj))?;
         println!(
             "sub name = {}, obj name = {}",
             sub_type.header.name(),
@@ -305,7 +327,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         Ok(())
     }
 
-    async fn handle_update_answer(&mut self) -> Result<()> {
+    async fn handle_update_answer(&mut self) -> Result<(), CommunicationError> {
         let ans = self.reader.read_update_answer().await?;
         match self.context.update_requests.remove(&{ ans.msg_seq }) {
             Some((_, sender)) => sender.send(ans).expect("channel is disconnected"),
@@ -315,7 +337,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         Ok(())
     }
 
-    async fn handle_fetch_answer(&mut self) -> Result<()> {
+    async fn handle_fetch_answer(&mut self) -> Result<(), CommunicationError> {
         let ans = self.reader.read_fetch_answer(&self.context.classes).await?;
         match self.context.fetch_requests.remove(&ans.msg_seq) {
             Some((_, sender)) => sender.send(ans).expect("channel is disconnected"),

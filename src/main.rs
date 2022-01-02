@@ -1,7 +1,9 @@
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use rustable::cstr_to_string;
 use rustable::medusa::config::Config;
 use rustable::medusa::context::SharedContext;
+use rustable::medusa::error::TreeError;
 use rustable::medusa::handler::EventHandler;
 use rustable::medusa::mcp::Connection;
 use rustable::medusa::tree::Tree;
@@ -18,7 +20,7 @@ impl EventHandler for SampleFsHandler {
         println!("sample fs handler");
 
         let mut subject = auth_data.subject;
-        subject.clear_object_act();
+        subject.clear_object_act().unwrap();
 
         let update_answer = ctx.update_object(&subject).await;
         println!("update_answer = {:?}\n", update_answer);
@@ -37,11 +39,11 @@ impl EventHandler for SampleProcessHandler {
         let mut subject = auth_data.subject;
         println!(
             "subject cmdline = {}",
-            cstr_to_string(subject.get_attribute("cmdline"))
+            cstr_to_string(subject.get_attribute("cmdline").unwrap())
         );
 
-        subject.clear_object_act();
-        subject.clear_subject_act();
+        subject.clear_object_act().unwrap();
+        subject.clear_subject_act().unwrap();
 
         let update_answer = ctx.update_object(&subject).await;
         println!("update_answer = {:?}\n", update_answer);
@@ -51,7 +53,7 @@ impl EventHandler for SampleProcessHandler {
 }
 
 #[rustfmt::skip]
-fn init_config() -> Config {
+fn create_config() -> Result<Config, TreeError> {
     // TODO simplify by making a macro?
     let fs = Tree::builder_with_attribute("getfile", "filename")
         .begin_node("name0", "/")
@@ -61,34 +63,34 @@ fn init_config() -> Config {
                 .begin_node("name2", "bin")
                     .begin_node("name2", r".*")
                         .with_handler(SampleFsHandler)
-                    .end_node()
-                .end_node()
-            .end_node()
+                    .end_node()?
+                .end_node()?
+            .end_node()?
 
             .begin_node("name3", "share")
-            .end_node()
+            .end_node()?
 
             .begin_node("name4", "bin")
-            .end_node()
+            .end_node()?
 
-        .end_node()
-        .build();
+        .end_node()?
+        .build()?;
 
     let domain = Tree::builder("getprocess")
         .begin_node("name5", r".*")
             .with_handler(SampleProcessHandler)
-        .end_node()
-        .build();
+        .end_node()?
+        .build()?;
 
-    Config::builder()
+    Ok(Config::builder()
         .add_tree(fs)
         .add_tree(domain)
-        .build()
+        .build())
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = init_config();
+async fn main() -> Result<()> {
+    let config = create_config().context("Failed to create config")?;
     println!("{:?}", config);
 
     let write_handle = OpenOptions::new()
@@ -98,8 +100,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     let read_handle = write_handle.try_clone().await?;
 
-    let mut connection = Connection::new(write_handle, read_handle, config).await?;
-    connection.run().await?;
+    let mut connection = Connection::new(write_handle, read_handle, config)
+        .await
+        .context("Connection failed")?;
+    connection.run().await.context("Communication failed")?;
 
     Ok(())
 }

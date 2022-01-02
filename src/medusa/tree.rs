@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use crate::medusa::error::TreeError;
 use crate::medusa::handler::EventHandler;
 use derivative::Derivative;
 use regex::Regex;
@@ -87,23 +88,22 @@ struct NodeBuilder {
 }
 
 impl NodeBuilder {
-    fn build(&mut self) -> Node {
+    fn build(&mut self) -> Result<Node, TreeError> {
         let name = self.name.clone();
-        // TODO Result
-        let path_regex = Regex::new(&self.path).expect("invalid expression");
+        let path_regex = Regex::new(&self.path)?;
         let handler = self.handler.take();
         let children = self
             .children
             .iter()
             .map(|x| x.borrow_mut().build())
-            .collect();
+            .collect::<Result<_, _>>()?;
 
-        Node {
+        Ok(Node {
             name,
             path_regex,
             handler,
             children,
-        }
+        })
     }
 }
 
@@ -148,30 +148,29 @@ impl TreeBuilder {
         self
     }
 
-    pub fn end_node(mut self) -> Self {
+    pub fn end_node(mut self) -> Result<Self, TreeError> {
         let parent = Rc::clone(
             self.cur
                 .borrow()
                 .parent
                 .as_ref()
-                .expect("end_node() called on root"),
+                .ok_or(TreeError::UnexpectedEndNode)?,
         );
         self.cur = parent;
-        self
+        Ok(self)
     }
 
-    pub fn build(self) -> Tree {
+    pub fn build(self) -> Result<Tree, TreeError> {
         let mut cur = self.cur.borrow_mut();
         if cur.parent.is_some() {
-            // TODO return Error
-            panic!("can only build from root level, use end_node() for every begin_node()");
+            return Err(TreeError::NotAtRootLevel);
         }
 
-        let root = cur.build();
-        Tree {
+        let root = cur.build()?;
+        Ok(Tree {
             event: self.event,
             attribute: self.attribute,
             root,
-        }
+        })
     }
 }
