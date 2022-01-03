@@ -1,5 +1,6 @@
-use crate::medusa::Writer;
-use crate::medusa::*;
+use crate::medusa::{
+    FetchAnswer, MedusaClass, MedusaEvtype, MedusaRequest, RequestType, UpdateAnswer, Writer,
+};
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;

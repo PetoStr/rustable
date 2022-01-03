@@ -1,7 +1,8 @@
 use crate::cstr_to_string;
-use crate::medusa::*;
+use crate::medusa::constants::*;
 use crate::medusa::{
-    AsyncReader, CommunicationError, Config, ConnectionError, NativeByteOrderReader, SharedContext,
+    AsyncReader, AuthRequestData, Command, CommunicationError, Config, ConnectionError,
+    DecisionAnswer, MedusaAnswer, MedusaRequest, NativeByteOrderReader, RequestType, SharedContext,
     Writer,
 };
 use std::collections::HashMap;

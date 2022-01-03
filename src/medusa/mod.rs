@@ -4,6 +4,9 @@ use std::num::NonZeroU64;
 pub mod config;
 pub use config::Config;
 
+mod constants;
+use constants::*;
+
 pub mod context;
 pub use context::SharedContext;
 
@@ -28,43 +31,6 @@ mod writer;
 use writer::Writer;
 
 type Command = u32;
-
-const MEDUSA_COMM_KCLASSNAME_MAX: usize = 32 - 2;
-const MEDUSA_COMM_ATTRNAME_MAX: usize = 32 - 5;
-const MEDUSA_COMM_EVNAME_MAX: usize = 32 - 2;
-
-const GREETING_NATIVE_BYTE_ORDER: u64 = 0x0000000066007e5a;
-const GREETING_REVERSED_BYTE_ORDER: u64 = 0x5a7e006600000000;
-
-const MEDUSA_COMM_AUTHREQUEST: u32 = 0x01;
-const MEDUSA_COMM_KCLASSDEF: u32 = 0x02;
-const MEDUSA_COMM_KCLASSUNDEF: u32 = 0x03;
-const MEDUSA_COMM_EVTYPEDEF: u32 = 0x04;
-const MEDUSA_COMM_EVTYPEUNDEF: u32 = 0x05;
-const MEDUSA_COMM_FETCH_ANSWER: u32 = 0x08;
-const MEDUSA_COMM_FETCH_ERROR: u32 = 0x09;
-const MEDUSA_COMM_UPDATE_ANSWER: u32 = 0x0a;
-
-const MEDUSA_COMM_FETCH_REQUEST: u64 = 0x88;
-const MEDUSA_COMM_UPDATE_REQUEST: u64 = 0x8a;
-const MEDUSA_COMM_AUTHANSWER: u64 = 0x81;
-
-const MED_COMM_TYPE_END: u8 = 0x00;
-const _MED_COMM_TYPE_UNSIGNED: u8 = 0x01;
-const _MED_COMM_TYPE_SIGNED: u8 = 0x02;
-const _MED_COMM_TYPE_STRING: u8 = 0x03;
-const _MED_COMM_TYPE_BITMAP: u8 = 0x04;
-const _MED_COMM_TYPE_BYTES: u8 = 0x05;
-
-const MEDUSA_BITMAP_BLOCK_SIZE: usize = 8;
-const MEDUSA_BITMAP_BLOCK_MASK: usize = MEDUSA_BITMAP_BLOCK_SIZE - 1;
-
-const MEDUSA_VS_ATTR_NAME: &str = "vs";
-const MEDUSA_VSR_ATTR_NAME: &str = "vsr";
-const MEDUSA_VSW_ATTR_NAME: &str = "vsw";
-const MEDUSA_VSS_ATTR_NAME: &str = "vss";
-const MEDUSA_OACT_ATTR_NAME: &str = "med_oact";
-const MEDUSA_SACT_ATTR_NAME: &str = "med_sact";
 
 #[derive(Default, Clone, Copy, Debug)]
 pub struct MedusaClassHeader {
