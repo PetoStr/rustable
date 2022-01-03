@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
-use crate::medusa::error::TreeError;
-use crate::medusa::handler::EventHandler;
+use crate::medusa::{EventHandler, TreeError};
 use derivative::Derivative;
 use regex::Regex;
 use std::cell::RefCell;

@@ -1,16 +1,31 @@
 use crate::cstr_to_string;
-use crate::medusa::error::AttributeError;
 use std::num::NonZeroU64;
 
 pub mod config;
+pub use config::Config;
+
 pub mod context;
+pub use context::SharedContext;
+
 pub mod error;
+pub use error::{AttributeError, CommunicationError, ConnectionError, ReaderError, TreeError};
+
 pub mod handler;
+pub use handler::EventHandler;
+
 pub mod mcp;
+pub use mcp::Connection;
+
 mod parser;
+
 mod reader;
+use reader::{AsyncReader, NativeByteOrderReader};
+
 pub mod tree;
+pub use tree::Tree;
+
 mod writer;
+use writer::Writer;
 
 type Command = u32;
 

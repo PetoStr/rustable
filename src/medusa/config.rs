@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::medusa::tree::Tree;
+use crate::medusa::Tree;
 
 #[derive(Debug)]
 pub struct Config {

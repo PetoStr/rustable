@@ -1,10 +1,9 @@
 use crate::cstr_to_string;
-use crate::medusa::config::Config;
-use crate::medusa::context::SharedContext;
-use crate::medusa::error::{CommunicationError, ConnectionError};
-use crate::medusa::reader::{AsyncReader, NativeByteOrderReader};
-use crate::medusa::writer::Writer;
 use crate::medusa::*;
+use crate::medusa::{
+    AsyncReader, CommunicationError, Config, ConnectionError, NativeByteOrderReader, SharedContext,
+    Writer,
+};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

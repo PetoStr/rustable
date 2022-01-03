@@ -1,13 +1,9 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use rustable::cstr_to_string;
-use rustable::medusa::config::Config;
-use rustable::medusa::context::SharedContext;
-use rustable::medusa::error::TreeError;
-use rustable::medusa::handler::EventHandler;
-use rustable::medusa::mcp::Connection;
-use rustable::medusa::tree::Tree;
-use rustable::medusa::{AuthRequestData, MedusaAnswer};
+use rustable::medusa::{
+    AuthRequestData, Config, Connection, EventHandler, MedusaAnswer, SharedContext, Tree, TreeError,
+};
 use tokio::fs::OpenOptions;
 
 const MEDUSA_FILE_NAME: &str = "/dev/medusa";

@@ -1,6 +1,5 @@
-use crate::medusa::error::ReaderError;
-use crate::medusa::parser;
 use crate::medusa::*;
+use crate::medusa::{parser, ReaderError};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use std::marker::Unpin;

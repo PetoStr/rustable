@@ -1,6 +1,4 @@
-use crate::medusa::context::SharedContext;
-use crate::medusa::AuthRequestData;
-use crate::medusa::MedusaAnswer;
+use crate::medusa::{AuthRequestData, MedusaAnswer, SharedContext};
 use async_trait::async_trait;
 
 #[async_trait]

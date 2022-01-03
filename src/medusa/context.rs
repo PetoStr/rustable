@@ -1,4 +1,4 @@
-use crate::medusa::writer::Writer;
+use crate::medusa::Writer;
 use crate::medusa::*;
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
