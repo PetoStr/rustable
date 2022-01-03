@@ -1,4 +1,5 @@
 use crate::cstr_to_string;
+use hashlink::LinkedHashMap;
 use std::num::NonZeroU64;
 
 pub mod config;
@@ -261,15 +262,14 @@ impl MedusaEvtype {
 
 #[derive(Default, Clone, Debug)]
 struct MedusaAttributes {
-    inner: Vec<MedusaAttribute>,
+    inner: LinkedHashMap<String, MedusaAttribute>,
 }
 
 impl MedusaAttributes {
     fn set(&mut self, attr_name: &str, data: Vec<u8>) -> Result<(), AttributeError> {
-        let mut attr = self
+        let attr = self
             .inner
-            .iter_mut()
-            .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does, maybe LinkedHashMap?
+            .get_mut(attr_name)
             .ok_or_else(|| AttributeError::UnknownAttribute(attr_name.to_owned()))?;
 
         attr.data = data;
@@ -280,8 +280,7 @@ impl MedusaAttributes {
     fn get(&self, attr_name: &str) -> Result<&[u8], AttributeError> {
         let attr = self
             .inner
-            .iter()
-            .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does, maybe LinkedHashMap?
+            .get(attr_name)
             .ok_or_else(|| AttributeError::UnknownAttribute(attr_name.to_owned()))?;
 
         Ok(&attr.data)
@@ -290,15 +289,14 @@ impl MedusaAttributes {
     fn get_mut(&mut self, attr_name: &str) -> Result<&mut [u8], AttributeError> {
         let attr = self
             .inner
-            .iter_mut()
-            .find(|x| x.header.name() == attr_name) // TODO HashMap, but preserve order like Vec does, maybe LinkedHashMap?
+            .get_mut(attr_name)
             .ok_or_else(|| AttributeError::UnknownAttribute(attr_name.to_owned()))?;
 
         Ok(&mut attr.data)
     }
 
     fn set_from_raw(&mut self, raw_data: &[u8]) {
-        for attr in self.inner.iter_mut() {
+        for attr in self.inner.values_mut() {
             let offset = attr.header.offset as usize;
             let length = attr.header.length as usize;
             attr.data = raw_data[offset..][..length].to_vec();
@@ -306,7 +304,7 @@ impl MedusaAttributes {
     }
 
     fn pack(&self, res: &mut [u8]) {
-        for attribute in &self.inner {
+        for attribute in self.inner.values() {
             let data = attribute.pack_data();
 
             // TODO make faster, `slice::copy_from_slice()` did not work
@@ -317,7 +315,7 @@ impl MedusaAttributes {
     }
 
     fn push(&mut self, attribute: MedusaAttribute) {
-        self.inner.push(attribute);
+        self.inner.insert(attribute.header.name(), attribute);
     }
 }
 
