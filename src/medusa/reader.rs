@@ -128,6 +128,11 @@ impl<R: AsyncReadExt + Unpin> NativeByteOrderReader<R> {
 #[async_trait]
 impl<R: AsyncReadExt + Unpin + Send> AsyncReader for NativeByteOrderReader<R> {
     async fn read_exact(&mut self, buf: &mut [u8]) -> Result<usize, ReaderError> {
-        Ok(self.read_handle.read_exact(buf).await?)
+        let mut total = 0;
+        while total != buf.len() {
+            total += self.read_handle.read(buf).await?;
+        }
+
+        Ok(total)
     }
 }
