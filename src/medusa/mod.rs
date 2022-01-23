@@ -1,5 +1,6 @@
 use crate::cstr_to_string;
 use hashlink::LinkedHashMap;
+use std::fmt;
 use std::num::NonZeroU64;
 
 pub mod config;
@@ -33,7 +34,7 @@ use writer::Writer;
 
 type Command = u32;
 
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Default, Clone, Copy)]
 pub struct MedusaClassHeader {
     id: u64,
     size: i16,
@@ -43,6 +44,16 @@ pub struct MedusaClassHeader {
 impl MedusaClassHeader {
     pub fn name(&self) -> String {
         cstr_to_string(&self.name)
+    }
+}
+
+impl fmt::Debug for MedusaClassHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MedusaClassHeader")
+            .field("id", &format_args!("0x{:x}", self.id))
+            .field("size", &self.size)
+            .field("name", &format_args!("\"{}\"", self.name()))
+            .finish()
     }
 }
 
@@ -195,7 +206,7 @@ impl MedusaClass {
     }
 }
 
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Default, Clone, Copy)]
 pub struct MedusaAttributeHeader {
     offset: i16,
     length: i16, // size in bytes
@@ -209,10 +220,70 @@ impl MedusaAttributeHeader {
     }
 }
 
-#[derive(Default, Clone, Debug)]
+impl fmt::Debug for MedusaAttributeHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MedusaAttributeHeader")
+            .field("offset", &self.offset)
+            .field("length", &self.length)
+            .field("type", &format_args!("0x{:x}", self.r#type))
+            .field("name", &format_args!("\"{}\"", self.name()))
+            .finish()
+    }
+}
+
+#[derive(Default, Clone)]
 pub struct MedusaAttribute {
     header: MedusaAttributeHeader,
     data: Vec<u8>,
+}
+
+impl fmt::Debug for MedusaAttribute {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let data = if self.header.r#type & 0x0f == MED_COMM_TYPE_UNSIGNED {
+            let data = self.data[..self.header.length as usize].to_vec();
+            if self.header.length == 1 {
+                format!("(u8) {}", u8::from_le_bytes(data.try_into().unwrap()))
+            } else if self.header.length == 2 {
+                format!("(u16) {}", u16::from_le_bytes(data.try_into().unwrap()))
+            } else if self.header.length == 4 {
+                format!("(u32) {}", u32::from_le_bytes(data.try_into().unwrap()))
+            } else {
+                // assuming length == 8
+                format!(
+                    "(u64) {}",
+                    u64::from_le_bytes(data.try_into().unwrap_or_default())
+                )
+            }
+        } else if self.header.r#type & 0x0f == MED_COMM_TYPE_SIGNED {
+            let data = self.data.clone();
+            if self.header.length == 1 {
+                format!("(i8) {}", i8::from_le_bytes(data.try_into().unwrap()))
+            } else if self.header.length == 2 {
+                format!("(i16) {}", i16::from_le_bytes(data.try_into().unwrap()))
+            } else if self.header.length == 4 {
+                format!("(i32) {}", i32::from_le_bytes(data.try_into().unwrap()))
+            } else {
+                // assuming length == 8
+                format!(
+                    "(i64) {}",
+                    i64::from_le_bytes(data.try_into().unwrap_or_default())
+                )
+            }
+        } else if self.header.r#type & 0x0f == MED_COMM_TYPE_STRING {
+            cstr_to_string(&self.data)
+        } else if self.header.r#type & 0x0f == MED_COMM_TYPE_BITMAP {
+            format!("(bitmap) {:?}", &self.data)
+        } else if self.header.r#type & 0x0f == MED_COMM_TYPE_BYTES {
+            format!("(bytes) {:?}", &self.data)
+        } else {
+            format!("(unknown type) {:?}", &self.data)
+        };
+
+        f.debug_struct("MedusaAttribute")
+            .field("header", &self.header)
+            .field("data", &data)
+            .finish()
+    }
 }
 
 impl MedusaAttribute {
@@ -226,7 +297,7 @@ impl MedusaAttribute {
     }
 }
 
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Default, Clone, Copy)]
 pub struct MedusaEvtypeHeader {
     evid: u64,
     size: u16,
@@ -241,6 +312,27 @@ pub struct MedusaEvtypeHeader {
 impl MedusaEvtypeHeader {
     pub fn name(&self) -> String {
         cstr_to_string(&self.name)
+    }
+}
+
+impl fmt::Debug for MedusaEvtypeHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MedusaEvtypeHeader")
+            .field("evid", &format_args!("0x{:x}", self.evid))
+            .field("size", &self.size)
+            .field("actbit", &format_args!("0x{:x}", self.actbit))
+            .field("ev_sub", &self.ev_sub)
+            .field("ev_obj", &self.ev_obj)
+            .field("name", &format_args!("\"{}\"", self.name()))
+            .field(
+                "ev_name",
+                &format_args!(
+                    "[\"{}\", \"{}\"]",
+                    &cstr_to_string(&self.ev_name[0]),
+                    &cstr_to_string(&self.ev_name[1])
+                ),
+            )
+            .finish()
     }
 }
 

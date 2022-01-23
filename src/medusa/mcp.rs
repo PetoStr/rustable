@@ -133,6 +133,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
                 }
             } else {
                 let auth_data = self.acquire_auth_req_data(id).await?;
+                println!("{:#?}", auth_data);
                 self.handle_event(auth_data);
             }
 

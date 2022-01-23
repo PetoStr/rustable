@@ -19,11 +19,11 @@ pub const MEDUSA_COMM_UPDATE_REQUEST: u64 = 0x8a;
 pub const MEDUSA_COMM_AUTHANSWER: u64 = 0x81;
 
 pub const MED_COMM_TYPE_END: u8 = 0x00;
-pub const _MED_COMM_TYPE_UNSIGNED: u8 = 0x01;
-pub const _MED_COMM_TYPE_SIGNED: u8 = 0x02;
-pub const _MED_COMM_TYPE_STRING: u8 = 0x03;
-pub const _MED_COMM_TYPE_BITMAP: u8 = 0x04;
-pub const _MED_COMM_TYPE_BYTES: u8 = 0x05;
+pub const MED_COMM_TYPE_UNSIGNED: u8 = 0x01;
+pub const MED_COMM_TYPE_SIGNED: u8 = 0x02;
+pub const MED_COMM_TYPE_STRING: u8 = 0x03;
+pub const MED_COMM_TYPE_BITMAP: u8 = 0x04;
+pub const MED_COMM_TYPE_BYTES: u8 = 0x05;
 
 pub const MEDUSA_BITMAP_BLOCK_SIZE: usize = 8;
 pub const MEDUSA_BITMAP_BLOCK_MASK: usize = MEDUSA_BITMAP_BLOCK_SIZE - 1;
