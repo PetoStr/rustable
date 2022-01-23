@@ -12,7 +12,7 @@ struct SampleFsHandler;
 
 #[async_trait]
 impl EventHandler for SampleFsHandler {
-    async fn handle(&self, ctx: SharedContext, auth_data: AuthRequestData) -> MedusaAnswer {
+    async fn handle(&self, ctx: &SharedContext, auth_data: AuthRequestData) -> MedusaAnswer {
         println!("sample fs handler");
 
         let mut subject = auth_data.subject;
@@ -29,7 +29,7 @@ struct SampleProcessHandler;
 
 #[async_trait]
 impl EventHandler for SampleProcessHandler {
-    async fn handle(&self, ctx: SharedContext, auth_data: AuthRequestData) -> MedusaAnswer {
+    async fn handle(&self, ctx: &SharedContext, auth_data: AuthRequestData) -> MedusaAnswer {
         println!("sample process handler");
 
         let mut subject = auth_data.subject;

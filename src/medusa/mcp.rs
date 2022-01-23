@@ -32,8 +32,8 @@ pub struct Connection<R: AsyncReadExt + Unpin> {
     config: Arc<Config>,
     // TODO endian based reader
     reader: NativeByteOrderReader<R>,
-    context: SharedContext,
     shutdown: Arc<AtomicBool>,
+    context: Arc<SharedContext>,
 }
 
 impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
@@ -49,7 +49,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
 
         let writer = Writer::new(write_handle);
 
-        let context = SharedContext::new(writer);
+        let context = Arc::new(SharedContext::new(writer));
 
         let greeting = reader.read_u64().await?;
         println!("greeting = 0x{:016x}", greeting);
@@ -147,16 +147,15 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
     }
 
     fn handle_event(&self, auth_data: AuthRequestData) {
-        let context = self.context.clone();
+        let context = Arc::clone(&self.context);
         let config = Arc::clone(&self.config);
 
         tokio::spawn(async move {
             let request_id = auth_data.request_id;
-            let writer = Arc::clone(&context.writer);
 
             async fn get_answer(
                 config: &Config,
-                context: SharedContext,
+                context: &SharedContext,
                 auth_data: AuthRequestData,
             ) -> Option<MedusaAnswer> {
                 let tree = config.tree_by_event(&auth_data.evtype.name())?;
@@ -176,12 +175,12 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
                 Some(handler.handle(context, auth_data).await)
             }
 
-            let status = get_answer(&config, context, auth_data)
+            let status = get_answer(&config, &context, auth_data)
                 .await
                 .unwrap_or(DEFAULT_ANSWER) as u16;
 
             let decision = DecisionAnswer { request_id, status };
-            writer.write(Arc::from(decision.to_vec()));
+            context.writer.write(Arc::from(decision.to_vec()));
         });
     }
 

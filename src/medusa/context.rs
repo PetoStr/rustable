@@ -6,33 +6,32 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
-#[derive(Clone)]
 pub struct SharedContext {
-    pub(crate) classes: Arc<DashMap<u64, MedusaClass>>,
-    pub(crate) evtypes: Arc<DashMap<u64, MedusaEvtype>>,
+    pub(crate) classes: DashMap<u64, MedusaClass>,
+    pub(crate) evtypes: DashMap<u64, MedusaEvtype>,
 
-    pub(crate) fetch_requests: Arc<DashMap<u64, UnboundedSender<FetchAnswer>>>,
-    pub(crate) update_requests: Arc<DashMap<u64, UnboundedSender<UpdateAnswer>>>,
+    pub(crate) fetch_requests: DashMap<u64, UnboundedSender<FetchAnswer>>,
+    pub(crate) update_requests: DashMap<u64, UnboundedSender<UpdateAnswer>>,
 
-    pub(crate) class_id: Arc<DashMap<String, u64>>,
-    pub(crate) evtype_id: Arc<DashMap<String, u64>>,
+    pub(crate) class_id: DashMap<String, u64>,
+    pub(crate) evtype_id: DashMap<String, u64>,
 
-    pub(crate) writer: Arc<Writer>,
+    pub(crate) writer: Writer,
 
-    request_id_cn: Arc<AtomicU64>,
+    request_id_cn: AtomicU64,
 }
 
 impl SharedContext {
     pub(crate) fn new(writer: Writer) -> Self {
         Self {
-            classes: Arc::new(DashMap::new()),
-            evtypes: Arc::new(DashMap::new()),
-            fetch_requests: Arc::new(DashMap::new()),
-            update_requests: Arc::new(DashMap::new()),
-            class_id: Arc::new(DashMap::new()),
-            evtype_id: Arc::new(DashMap::new()),
-            writer: Arc::new(writer),
-            request_id_cn: Arc::new(AtomicU64::new(111)),
+            classes: DashMap::new(),
+            evtypes: DashMap::new(),
+            fetch_requests: DashMap::new(),
+            update_requests: DashMap::new(),
+            class_id: DashMap::new(),
+            evtype_id: DashMap::new(),
+            writer,
+            request_id_cn: AtomicU64::new(111),
         }
     }
 

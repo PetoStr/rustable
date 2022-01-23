@@ -3,5 +3,5 @@ use async_trait::async_trait;
 
 #[async_trait]
 pub trait EventHandler: Send + Sync + 'static {
-    async fn handle(&self, context: SharedContext, auth_data: AuthRequestData) -> MedusaAnswer;
+    async fn handle(&self, context: &SharedContext, auth_data: AuthRequestData) -> MedusaAnswer;
 }
