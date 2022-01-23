@@ -6,9 +6,9 @@ use crate::medusa::{
     Writer,
 };
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::broadcast;
 
 const DEFAULT_ANSWER: MedusaAnswer = MedusaAnswer::Ok;
 const PROTOCOL_VERSION: u64 = 2;
@@ -32,8 +32,8 @@ pub struct Connection<R: AsyncReadExt + Unpin> {
     config: Arc<Config>,
     // TODO endian based reader
     reader: NativeByteOrderReader<R>,
-    shutdown: Arc<AtomicBool>,
     context: Arc<SharedContext>,
+    shutdown_tx: broadcast::Sender<()>,
 }
 
 impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
@@ -45,9 +45,10 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
     where
         W: AsyncWriteExt + Unpin + Send + 'static,
     {
+        let (shutdown_tx, _) = broadcast::channel(1);
         let mut reader = NativeByteOrderReader::new(read_handle);
 
-        let writer = Writer::new(write_handle);
+        let writer = Writer::new(write_handle, shutdown_tx.subscribe());
 
         let context = Arc::new(SharedContext::new(writer));
 
@@ -74,19 +75,34 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
             config: Arc::new(config),
             reader,
             context,
-            shutdown: Arc::new(AtomicBool::new(false)),
+            shutdown_tx,
         })
     }
 
     pub async fn run(&mut self) -> Result<(), CommunicationError> {
-        self.spawn_shutdown_handler();
+        tokio::select! {
+            res = self.run_loop() => res,
+            _ = tokio::signal::ctrl_c() => {
+                println!("shutting down");
+                let mut printk = self.context.empty_class("printk").unwrap();
+                let _ = printk.set_attribute("message", b"Goodbye from Rustable".to_vec());
+                let req = MedusaRequest {
+                    req_type: RequestType::Update,
+                    class_id: printk.header.id,
+                    id: 0xffffffff,
+                    data: &printk.pack_attributes(),
+                };
+                self.context.writer.write(Arc::from(req.to_vec()));
+                self.shutdown_tx.send(()).unwrap();
 
-        while !self.shutdown.load(Ordering::SeqCst) {
-            let id = self.reader.read_u64().await?;
-
-            if self.shutdown.load(Ordering::SeqCst) {
-                break;
+                Ok(())
             }
+        }
+    }
+
+    async fn run_loop(&mut self) -> Result<(), CommunicationError> {
+        loop {
+            let id = self.reader.read_u64().await?;
 
             if id == 0 {
                 let cmd = self.reader.read_command().await?;
@@ -122,28 +138,6 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
 
             println!();
         }
-
-        Ok(())
-    }
-
-    fn spawn_shutdown_handler(&self) {
-        let context = self.context.clone();
-        let shutdown = Arc::clone(&self.shutdown);
-        tokio::spawn(async move {
-            tokio::signal::ctrl_c().await.unwrap();
-            println!("ctrl-c");
-            shutdown.store(true, Ordering::SeqCst);
-
-            let mut printk = context.empty_class("printk").unwrap();
-            let _ = printk.set_attribute("message", b"Goodbye from Rustable".to_vec());
-            let req = MedusaRequest {
-                req_type: RequestType::Update,
-                class_id: printk.header.id,
-                id: 0xffffffff,
-                data: &printk.pack_attributes(),
-            };
-            context.writer.write(Arc::from(req.to_vec()));
-        });
     }
 
     fn handle_event(&self, auth_data: AuthRequestData) {
