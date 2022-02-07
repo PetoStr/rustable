@@ -31,7 +31,7 @@ where
     }
 
     async fn read_class(&mut self) -> Result<MedusaClass, ReaderError> {
-        let mut buf = [0; mem::size_of::<MedusaClassHeader>()];
+        let mut buf = [0; MedusaClassHeader::size()];
         self.read_exact(&mut buf).await?;
         let (_, header) = parser::parse_class_header(&buf)
             .map_err(|x| ReaderError::ParseError(format!("Failed to read class: {}", x)))?;
@@ -43,7 +43,7 @@ where
     }
 
     async fn read_evtype(&mut self) -> Result<MedusaEvtype, ReaderError> {
-        let mut buf = [0; std::mem::size_of::<MedusaEvtypeHeader>()];
+        let mut buf = [0; MedusaEvtypeHeader::size()];
         self.read_exact(&mut buf).await?;
         let (_, header) = parser::parse_evtype_header(&buf)
             .map_err(|x| ReaderError::ParseError(format!("Failed to read evtype: {}", x)))?;
@@ -54,7 +54,7 @@ where
     }
 
     async fn read_attribute_header(&mut self) -> Result<MedusaAttributeHeader, ReaderError> {
-        let mut buf = [0; mem::size_of::<MedusaAttributeHeader>()];
+        let mut buf = [0; MedusaAttributeHeader::size()];
         self.read_exact(&mut buf).await?;
         let (_, attr_header) = parser::parse_attribute_header(&buf).map_err(|x| {
             ReaderError::ParseError(format!("Failed to read attribute header: {}", x))
@@ -68,13 +68,13 @@ where
         loop {
             let header = self.read_attribute_header().await?;
 
-            if header.r#type == MED_COMM_TYPE_END {
+            if header.data_type == AttributeDataType::End {
                 break;
             }
 
             res.push(MedusaAttribute {
                 header,
-                ..Default::default()
+                data: Vec::new(),
             });
         }
 
@@ -82,7 +82,7 @@ where
     }
 
     async fn read_update_answer(&mut self) -> Result<UpdateAnswer, ReaderError> {
-        let mut buf = [0; std::mem::size_of::<UpdateAnswer>()];
+        let mut buf = [0; UpdateAnswer::size()];
         self.read_exact(&mut buf).await?;
         let (_, update_answer) = parser::parse_update_answer(&buf)
             .map_err(|x| ReaderError::ParseError(format!("Failed to read update answer: {}", x)))?;

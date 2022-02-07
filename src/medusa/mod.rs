@@ -1,6 +1,7 @@
 use crate::cstr_to_string;
 use hashlink::LinkedHashMap;
 use std::fmt;
+use std::mem;
 use std::num::NonZeroU64;
 
 pub mod config;
@@ -34,16 +35,20 @@ use writer::Writer;
 
 type Command = u32;
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone)]
 pub struct MedusaClassHeader {
     id: u64,
     size: i16,
-    name: [u8; MEDUSA_COMM_KCLASSNAME_MAX],
+    name: String,
 }
 
 impl MedusaClassHeader {
-    pub fn name(&self) -> String {
-        cstr_to_string(&self.name)
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    const fn size() -> usize {
+        mem::size_of::<u64>() + mem::size_of::<i16>() + MEDUSA_COMM_KCLASSNAME_MAX
     }
 }
 
@@ -206,32 +211,31 @@ impl MedusaClass {
     }
 }
 
-#[derive(Default, Clone, Copy)]
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct MedusaAttributeHeader {
     offset: i16,
     length: i16, // size in bytes
-    r#type: u8,  // i think this should be u8 and not i8 because of bit masks
-    name: [u8; MEDUSA_COMM_ATTRNAME_MAX],
+    mods: AttributeMods,
+    endianness: AttributeEndianness,
+    data_type: AttributeDataType,
+    name: String,
 }
 
 impl MedusaAttributeHeader {
-    pub fn name(&self) -> String {
-        cstr_to_string(&self.name)
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    const fn size() -> usize {
+        mem::size_of::<i16>()
+            + mem::size_of::<i16>()
+            + mem::size_of::<u8>()
+            + MEDUSA_COMM_ATTRNAME_MAX
     }
 }
 
-impl fmt::Debug for MedusaAttributeHeader {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("MedusaAttributeHeader")
-            .field("offset", &self.offset)
-            .field("length", &self.length)
-            .field("type", &format_args!("0x{:x}", self.r#type))
-            .field("name", &format_args!("\"{}\"", self.name()))
-            .finish()
-    }
-}
-
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct MedusaAttribute {
     header: MedusaAttributeHeader,
     data: Vec<u8>,
@@ -239,7 +243,7 @@ pub struct MedusaAttribute {
 
 impl fmt::Debug for MedusaAttribute {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let data = if self.header.r#type & 0x0f == MED_COMM_TYPE_UNSIGNED {
+        let data = if self.header.data_type == AttributeDataType::Unsigned {
             let data = self.data[..self.header.length as usize].to_vec();
             if self.header.length == 1 {
                 format!("(u8) {}", u8::from_le_bytes(data.try_into().unwrap()))
@@ -254,7 +258,7 @@ impl fmt::Debug for MedusaAttribute {
                     u64::from_le_bytes(data.try_into().unwrap_or_default())
                 )
             }
-        } else if self.header.r#type & 0x0f == MED_COMM_TYPE_SIGNED {
+        } else if self.header.data_type == AttributeDataType::Signed {
             let data = self.data.clone();
             if self.header.length == 1 {
                 format!("(i8) {}", i8::from_le_bytes(data.try_into().unwrap()))
@@ -269,11 +273,11 @@ impl fmt::Debug for MedusaAttribute {
                     i64::from_le_bytes(data.try_into().unwrap_or_default())
                 )
             }
-        } else if self.header.r#type & 0x0f == MED_COMM_TYPE_STRING {
+        } else if self.header.data_type == AttributeDataType::String {
             cstr_to_string(&self.data)
-        } else if self.header.r#type & 0x0f == MED_COMM_TYPE_BITMAP {
+        } else if self.header.data_type == AttributeDataType::Bitmap {
             format!("(bitmap) {:?}", &self.data)
-        } else if self.header.r#type & 0x0f == MED_COMM_TYPE_BYTES {
+        } else if self.header.data_type == AttributeDataType::Bytes {
             format!("(bytes) {:?}", &self.data)
         } else {
             format!("(unknown type) {:?}", &self.data)
@@ -297,7 +301,7 @@ impl MedusaAttribute {
     }
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub struct MedusaEvtypeHeader {
     evid: u64,
     size: u16,
@@ -305,34 +309,23 @@ pub struct MedusaEvtypeHeader {
     //ev_kclass: [u64; 2],
     ev_sub: u64,
     ev_obj: Option<NonZeroU64>,
-    name: [u8; MEDUSA_COMM_EVNAME_MAX],
-    ev_name: [[u8; MEDUSA_COMM_ATTRNAME_MAX]; 2],
+    name: String,
+    ev_name: [String; 2],
 }
 
 impl MedusaEvtypeHeader {
-    pub fn name(&self) -> String {
-        cstr_to_string(&self.name)
+    pub fn name(&self) -> &str {
+        &self.name
     }
-}
 
-impl fmt::Debug for MedusaEvtypeHeader {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("MedusaEvtypeHeader")
-            .field("evid", &format_args!("0x{:x}", self.evid))
-            .field("size", &self.size)
-            .field("actbit", &format_args!("0x{:x}", self.actbit))
-            .field("ev_sub", &self.ev_sub)
-            .field("ev_obj", &self.ev_obj)
-            .field("name", &format_args!("\"{}\"", self.name()))
-            .field(
-                "ev_name",
-                &format_args!(
-                    "[\"{}\", \"{}\"]",
-                    &cstr_to_string(&self.ev_name[0]),
-                    &cstr_to_string(&self.ev_name[1])
-                ),
-            )
-            .finish()
+    const fn size() -> usize {
+        mem::size_of::<u64>()
+            + mem::size_of::<u16>()
+            + mem::size_of::<u16>()
+            + mem::size_of::<u64>()
+            + mem::size_of::<u64>()
+            + MEDUSA_COMM_EVNAME_MAX
+            + 2 * MEDUSA_COMM_ATTRNAME_MAX
     }
 }
 
@@ -347,7 +340,7 @@ impl MedusaEvtype {
         self.attributes.get(attr_name)
     }
 
-    pub fn name(&self) -> String {
+    pub fn name(&self) -> &str {
         self.header.name()
     }
 }
@@ -407,7 +400,7 @@ impl MedusaAttributes {
     }
 
     fn push(&mut self, attribute: MedusaAttribute) {
-        self.inner.insert(attribute.header.name(), attribute);
+        self.inner.insert(attribute.header.name.clone(), attribute);
     }
 }
 
@@ -470,11 +463,16 @@ impl DecisionAnswer {
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
-#[repr(packed)]
 pub struct UpdateAnswer {
     class_id: u64,
     msg_seq: u64,
     status: i32,
+}
+
+impl UpdateAnswer {
+    const fn size() -> usize {
+        mem::size_of::<u64>() + mem::size_of::<u64>() + mem::size_of::<i32>()
+    }
 }
 
 #[allow(dead_code)]

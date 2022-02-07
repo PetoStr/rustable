@@ -1,3 +1,5 @@
+use bitflags::bitflags;
+
 pub const MEDUSA_COMM_KCLASSNAME_MAX: usize = 32 - 2;
 pub const MEDUSA_COMM_ATTRNAME_MAX: usize = 32 - 5;
 pub const MEDUSA_COMM_EVNAME_MAX: usize = 32 - 2;
@@ -18,12 +20,61 @@ pub const MEDUSA_COMM_FETCH_REQUEST: u64 = 0x88;
 pub const MEDUSA_COMM_UPDATE_REQUEST: u64 = 0x8a;
 pub const MEDUSA_COMM_AUTHANSWER: u64 = 0x81;
 
-pub const MED_COMM_TYPE_END: u8 = 0x00;
-pub const MED_COMM_TYPE_UNSIGNED: u8 = 0x01;
-pub const MED_COMM_TYPE_SIGNED: u8 = 0x02;
-pub const MED_COMM_TYPE_STRING: u8 = 0x03;
-pub const MED_COMM_TYPE_BITMAP: u8 = 0x04;
-pub const MED_COMM_TYPE_BYTES: u8 = 0x05;
+bitflags! {
+    #[derive(Default)]
+    pub struct AttributeMods: u8 {
+        const READ_ONLY = 0x80;
+        const PRIMARY_KEY = 0x40;
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AttributeEndianness {
+    Native = 0,
+    Unused,
+    Big,
+    Little,
+}
+
+impl TryFrom<u8> for AttributeEndianness {
+    type Error = ();
+
+    fn try_from(v: u8) -> Result<Self, Self::Error> {
+        match v {
+            x if x == AttributeEndianness::Native as u8 => Ok(AttributeEndianness::Native),
+            x if x == AttributeEndianness::Unused as u8 => Ok(AttributeEndianness::Unused),
+            x if x == AttributeEndianness::Big as u8 => Ok(AttributeEndianness::Big),
+            x if x == AttributeEndianness::Little as u8 => Ok(AttributeEndianness::Little),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AttributeDataType {
+    End = 0,
+    Unsigned,
+    Signed,
+    String,
+    Bitmap,
+    Bytes,
+}
+
+impl TryFrom<u8> for AttributeDataType {
+    type Error = ();
+
+    fn try_from(v: u8) -> Result<Self, Self::Error> {
+        match v {
+            x if x == AttributeDataType::End as u8 => Ok(AttributeDataType::End),
+            x if x == AttributeDataType::Unsigned as u8 => Ok(AttributeDataType::Unsigned),
+            x if x == AttributeDataType::Signed as u8 => Ok(AttributeDataType::Signed),
+            x if x == AttributeDataType::String as u8 => Ok(AttributeDataType::String),
+            x if x == AttributeDataType::Bitmap as u8 => Ok(AttributeDataType::Bitmap),
+            x if x == AttributeDataType::Bytes as u8 => Ok(AttributeDataType::Bytes),
+            _ => Err(()),
+        }
+    }
+}
 
 pub const MEDUSA_BITMAP_BLOCK_SIZE: usize = 8;
 pub const MEDUSA_BITMAP_BLOCK_MASK: usize = MEDUSA_BITMAP_BLOCK_SIZE - 1;

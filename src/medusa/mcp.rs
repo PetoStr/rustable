@@ -153,7 +153,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
                 context: &SharedContext,
                 auth_data: AuthRequestData,
             ) -> Option<MedusaAnswer> {
-                let tree = config.tree_by_event(&auth_data.evtype.name())?;
+                let tree = config.tree_by_event(auth_data.evtype.name())?;
                 let path = tree
                     .attribute()
                     .map(|attr_name| {
@@ -243,19 +243,13 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
     async fn register_class(&mut self) -> Result<(), CommunicationError> {
         let mut class = self.reader.read_class().await?;
         let size = class.header.size; // copy so there's no UB when referencing packed struct field
-        let name = class.header.name();
+        let name = class.header.name().to_owned();
         println!("class name = {}, size = {}", name, size);
 
         let attrs = self.reader.read_attributes().await?;
         println!("attributes:");
         for attr in attrs {
-            println!(
-                "  attr={}, offset={}, type={:x}, len={}",
-                attr.header.name(),
-                attr.header.offset,
-                attr.header.r#type as u16,
-                attr.header.length
-            );
+            println!("{:#?}", attr.header);
             class.attributes.push(attr);
         }
         println!();
@@ -270,7 +264,7 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         let mut evtype = self.reader.read_evtype().await?;
         let ev_sub = evtype.header.ev_sub;
         let ev_obj = evtype.header.ev_obj.expect("ev_obj is 0").get(); // should always be non-zero from medusa
-        let name = evtype.header.name();
+        let name = evtype.header.name().to_owned();
 
         println!("evtype name = {}, size = {}", name, evtype.header.size);
         println!("sub = 0x{:x}, obj = 0x{:x}", ev_sub, ev_obj);
@@ -290,26 +284,19 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
         );
         println!(
             "ev_name0 = {}, ev_name1 = {}",
-            cstr_to_string(&evtype.header.ev_name[0]),
-            cstr_to_string(&evtype.header.ev_name[1])
+            evtype.header.ev_name[0], evtype.header.ev_name[1]
         );
         println!("actbit = 0x{:x}", { evtype.header.actbit });
 
         if ev_sub == ev_obj && evtype.header.ev_name[0] == evtype.header.ev_name[1] {
             evtype.header.ev_obj = None;
-            evtype.header.ev_name[1] = [0; MEDUSA_COMM_ATTRNAME_MAX];
+            evtype.header.ev_name[1] = String::new();
         }
 
         let attrs = self.reader.read_attributes().await?;
-        print!("attributes:");
+        println!("attributes:");
         for attr in attrs {
-            print!(
-                "  attr={}, offset={}, type={:x}, len={}",
-                attr.header.name(),
-                attr.header.offset,
-                attr.header.r#type as u16,
-                attr.header.length
-            );
+            println!("{:#?}", attr.header);
             evtype.attributes.push(attr);
         }
         println!();

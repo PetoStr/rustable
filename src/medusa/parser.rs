@@ -16,7 +16,7 @@ pub fn parse_class_header(i: &[u8]) -> IResult<&[u8], MedusaClassHeader> {
         MedusaClassHeader {
             id,
             size,
-            name: name.try_into().unwrap(),
+            name: cstr_to_string(name),
         },
     ))
 }
@@ -38,8 +38,8 @@ pub fn parse_evtype_header(i: &[u8]) -> IResult<&[u8], MedusaEvtypeHeader> {
             actbit,
             ev_sub,
             ev_obj: NonZeroU64::new(ev_obj),
-            name: name.try_into().unwrap(),
-            ev_name: [ev_name1.try_into().unwrap(), ev_name2.try_into().unwrap()],
+            name: cstr_to_string(name),
+            ev_name: [cstr_to_string(ev_name1), cstr_to_string(ev_name2)],
         },
     ))
 }
@@ -50,13 +50,24 @@ pub fn parse_attribute_header(i: &[u8]) -> IResult<&[u8], MedusaAttributeHeader>
     let (i, r#type) = le_u8(i)?;
     let (i, name) = take(MEDUSA_COMM_ATTRNAME_MAX)(i)?;
 
+    // TODO return error
+    let mods = AttributeMods::from_bits(r#type & 0xc0).expect("Unknown attribute mod");
+    let endianness = ((r#type & 0x30) >> 4)
+        .try_into()
+        .expect("Unknown attribute endianness");
+    let data_type = (r#type & 0x0f)
+        .try_into()
+        .expect("Unknown attribute data type");
+
     Ok((
         i,
         MedusaAttributeHeader {
             offset,
             length,
-            r#type,
-            name: name.try_into().unwrap(),
+            mods,
+            endianness,
+            data_type,
+            name: cstr_to_string(name),
         },
     ))
 }
