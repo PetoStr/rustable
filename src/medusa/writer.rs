@@ -1,6 +1,5 @@
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::broadcast;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 pub(crate) struct Writer {
@@ -8,23 +7,15 @@ pub(crate) struct Writer {
 }
 
 impl Writer {
-    pub(crate) fn new<W>(mut write_handle: W, mut shutdown_notify: broadcast::Receiver<()>) -> Self
+    pub(crate) fn new<W>(mut write_handle: W) -> Self
     where
         W: AsyncWriteExt + Unpin + Send + 'static,
     {
         let (sender, mut receiver): (_, UnboundedReceiver<Arc<[u8]>>) = mpsc::unbounded_channel();
 
         tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    data = receiver.recv() => {
-                        match data {
-                            Some(ref ref_data) => write_handle.write_all(ref_data).await.unwrap(),
-                            None => break
-                        }
-                    }
-                    _ = shutdown_notify.recv() => break,
-                }
+            while let Some(data) = receiver.recv().await {
+                write_handle.write_all(&data).await.unwrap();
             }
         });
 

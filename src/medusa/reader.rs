@@ -5,8 +5,10 @@ use crate::medusa::{
 };
 use async_trait::async_trait;
 use dashmap::DashMap;
+use polling::{Event, Poller};
 use std::marker::Unpin;
 use std::mem;
+use std::os::unix::io::AsRawFd;
 use tokio::io::AsyncReadExt;
 
 #[async_trait]
@@ -117,20 +119,32 @@ where
 // for native byte order
 pub(crate) struct NativeByteOrderReader<R: AsyncReadExt + Unpin> {
     read_handle: R,
+    poller: Poller,
 }
 
-impl<R: AsyncReadExt + Unpin> NativeByteOrderReader<R> {
-    pub(crate) fn new(read_handle: R) -> Self {
-        Self { read_handle }
+impl<R: AsyncReadExt + AsRawFd + Unpin> NativeByteOrderReader<R> {
+    pub(crate) fn new(read_handle: R) -> Result<Self, ReaderError> {
+        let poller = Poller::new()?;
+        poller.add(&read_handle, Event::readable(0))?;
+        Ok(Self {
+            read_handle,
+            poller,
+        })
     }
 }
 
 #[async_trait]
-impl<R: AsyncReadExt + Unpin + Send> AsyncReader for NativeByteOrderReader<R> {
+impl<R: AsyncReadExt + AsRawFd + Unpin + Send> AsyncReader for NativeByteOrderReader<R> {
     async fn read_exact(&mut self, buf: &mut [u8]) -> Result<usize, ReaderError> {
         let mut total = 0;
+        let mut events = Vec::new();
+
         while total != buf.len() {
+            self.poller.wait(&mut events, None)?;
             total += self.read_handle.read(buf).await?;
+
+            // Another interest in I/O requires reset
+            self.poller.modify(&self.read_handle, Event::readable(0))?;
         }
 
         Ok(total)

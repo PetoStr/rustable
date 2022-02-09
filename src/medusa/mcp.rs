@@ -2,13 +2,12 @@ use crate::cstr_to_string;
 use crate::medusa::constants::*;
 use crate::medusa::{
     AsyncReader, AuthRequestData, Command, CommunicationError, Config, ConnectionError,
-    DecisionAnswer, MedusaAnswer, MedusaRequest, NativeByteOrderReader, RequestType, SharedContext,
-    Writer,
+    DecisionAnswer, MedusaAnswer, NativeByteOrderReader, SharedContext, Writer,
 };
 use std::collections::HashMap;
+use std::os::unix::io::AsRawFd;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::broadcast;
 
 const DEFAULT_ANSWER: MedusaAnswer = MedusaAnswer::Ok;
 const PROTOCOL_VERSION: u64 = 2;
@@ -33,10 +32,9 @@ pub struct Connection<R: AsyncReadExt + Unpin> {
     // TODO endian based reader
     reader: NativeByteOrderReader<R>,
     context: Arc<SharedContext>,
-    shutdown_tx: broadcast::Sender<()>,
 }
 
-impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
+impl<R: AsyncReadExt + AsRawFd + Unpin + Send> Connection<R> {
     pub async fn new<W>(
         write_handle: W,
         read_handle: R,
@@ -45,10 +43,9 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
     where
         W: AsyncWriteExt + Unpin + Send + 'static,
     {
-        let (shutdown_tx, _) = broadcast::channel(1);
-        let mut reader = NativeByteOrderReader::new(read_handle);
+        let mut reader = NativeByteOrderReader::new(read_handle)?;
 
-        let writer = Writer::new(write_handle, shutdown_tx.subscribe());
+        let writer = Writer::new(write_handle);
 
         let context = Arc::new(SharedContext::new(writer));
 
@@ -75,29 +72,11 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
             config: Arc::new(config),
             reader,
             context,
-            shutdown_tx,
         })
     }
 
     pub async fn run(&mut self) -> Result<(), CommunicationError> {
-        tokio::select! {
-            res = self.run_loop() => res,
-            _ = tokio::signal::ctrl_c() => {
-                println!("shutting down");
-                let mut printk = self.context.empty_class("printk").unwrap();
-                let _ = printk.set_attribute("message", b"Goodbye from Rustable".to_vec());
-                let req = MedusaRequest {
-                    req_type: RequestType::Update,
-                    class_id: printk.header.id,
-                    id: 0xffffffff,
-                    data: &printk.pack_attributes(),
-                };
-                self.context.writer.write(Arc::from(req.to_vec()));
-                self.shutdown_tx.send(()).unwrap();
-
-                Ok(())
-            }
-        }
+        self.run_loop().await
     }
 
     async fn run_loop(&mut self) -> Result<(), CommunicationError> {
@@ -299,7 +278,6 @@ impl<R: AsyncReadExt + Unpin + Send> Connection<R> {
             println!("{:#?}", attr.header);
             evtype.attributes.push(attr);
         }
-        println!();
 
         println!("evid = 0x{:x}", { evtype.header.evid });
         self.context.evtype_id.insert(name, evtype.header.evid);
