@@ -4,7 +4,7 @@ use rustable::cstr_to_string;
 use rustable::medusa::{
     AuthRequestData, Config, Connection, EventHandler, MedusaAnswer, SharedContext, Tree, TreeError,
 };
-use tokio::fs::OpenOptions;
+use std::fs::OpenOptions;
 
 const MEDUSA_FILE_NAME: &str = "/dev/medusa";
 
@@ -92,9 +92,8 @@ async fn main() -> Result<()> {
     let write_handle = OpenOptions::new()
         .read(true)
         .write(true)
-        .open(MEDUSA_FILE_NAME)
-        .await?;
-    let read_handle = write_handle.try_clone().await?;
+        .open(MEDUSA_FILE_NAME)?;
+    let read_handle = write_handle.try_clone()?;
 
     let mut connection = Connection::new(write_handle, read_handle, config)
         .await

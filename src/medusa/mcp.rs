@@ -5,9 +5,9 @@ use crate::medusa::{
     DecisionAnswer, MedusaAnswer, NativeByteOrderReader, SharedContext, Writer,
 };
 use std::collections::HashMap;
+use std::io::{Read, Write};
 use std::os::unix::io::AsRawFd;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const DEFAULT_ANSWER: MedusaAnswer = MedusaAnswer::Ok;
 const PROTOCOL_VERSION: u64 = 2;
@@ -27,21 +27,21 @@ lazy_static! {
     };
 }
 
-pub struct Connection<R: AsyncReadExt + Unpin> {
+pub struct Connection<R: Read + Unpin> {
     config: Arc<Config>,
     // TODO endian based reader
     reader: NativeByteOrderReader<R>,
     context: Arc<SharedContext>,
 }
 
-impl<R: AsyncReadExt + AsRawFd + Unpin + Send> Connection<R> {
+impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
     pub async fn new<W>(
         write_handle: W,
         read_handle: R,
         config: Config,
     ) -> Result<Self, ConnectionError>
     where
-        W: AsyncWriteExt + Unpin + Send + 'static,
+        W: Write + Unpin + Send + 'static,
     {
         let mut reader = NativeByteOrderReader::new(read_handle)?;
 
