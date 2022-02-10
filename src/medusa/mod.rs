@@ -227,6 +227,10 @@ impl MedusaAttributeHeader {
         &self.name
     }
 
+    pub fn is_read_only(&self) -> bool {
+        self.mods.contains(AttributeMods::READ_ONLY)
+    }
+
     const fn size() -> usize {
         mem::size_of::<i16>()
             + mem::size_of::<i16>()
@@ -356,6 +360,10 @@ impl MedusaAttributes {
             .inner
             .get_mut(attr_name)
             .ok_or_else(|| AttributeError::UnknownAttribute(attr_name.to_owned()))?;
+
+        if attr.header.is_read_only() {
+            return Err(AttributeError::ModifyReadOnlyError(attr_name.to_owned()));
+        }
 
         attr.data = data;
 

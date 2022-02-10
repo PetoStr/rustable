@@ -58,4 +58,6 @@ pub enum CommunicationError {
 pub enum AttributeError {
     #[error("unknown attribute: \"{0}\"")]
     UnknownAttribute(String),
+    #[error("cannot modify read-only attribute: \"{0}\"")]
+    ModifyReadOnlyError(String),
 }
