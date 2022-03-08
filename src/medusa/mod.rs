@@ -14,10 +14,10 @@ pub mod context;
 pub use context::SharedContext;
 
 pub mod error;
-pub use error::{AttributeError, CommunicationError, ConnectionError, ReaderError, TreeError};
+pub use error::{AttributeError, CommunicationError, ConfigError, ConnectionError, ReaderError};
 
 pub mod handler;
-pub use handler::EventHandler;
+pub use handler::{EventHandler, EventHandlerBuilder, Handler, HandlerData};
 
 pub mod mcp;
 pub use mcp::Connection;
@@ -27,8 +27,11 @@ mod parser;
 mod reader;
 use reader::{AsyncReader, NativeByteOrderReader};
 
+mod space;
+pub use space::Space;
+
 pub mod tree;
-pub use tree::Tree;
+pub use tree::{Node, NodeBuilder, Tree, TreeBuilder};
 
 mod writer;
 use writer::Writer;
@@ -68,6 +71,7 @@ pub struct MedusaClass {
     attributes: MedusaAttributes,
 }
 
+// TODO check bounds
 impl MedusaClass {
     pub fn add_vs(&mut self, n: usize) -> Result<(), AttributeError> {
         let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME)?;
@@ -81,6 +85,10 @@ impl MedusaClass {
         vs[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
 
         Ok(())
+    }
+
+    pub fn set_vs(&mut self, vs: Vec<u8>) -> Result<(), AttributeError> {
+        self.attributes.set(MEDUSA_VS_ATTR_NAME, vs)
     }
 
     pub fn clear_vs(&mut self) -> Result<(), AttributeError> {
@@ -104,6 +112,10 @@ impl MedusaClass {
         Ok(())
     }
 
+    pub fn set_vs_read(&mut self, vs: Vec<u8>) -> Result<(), AttributeError> {
+        self.attributes.set(MEDUSA_VSR_ATTR_NAME, vs)
+    }
+
     pub fn clear_vs_read(&mut self) -> Result<(), AttributeError> {
         let vsr = self.attributes.get_mut(MEDUSA_VSR_ATTR_NAME)?;
         vsr.fill(0);
@@ -123,6 +135,10 @@ impl MedusaClass {
         vsw[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
 
         Ok(())
+    }
+
+    pub fn set_vs_write(&mut self, vs: Vec<u8>) -> Result<(), AttributeError> {
+        self.attributes.set(MEDUSA_VSW_ATTR_NAME, vs)
     }
 
     pub fn clear_vs_write(&mut self) -> Result<(), AttributeError> {
@@ -146,6 +162,10 @@ impl MedusaClass {
         Ok(())
     }
 
+    pub fn set_vs_see(&mut self, vs: Vec<u8>) -> Result<(), AttributeError> {
+        self.attributes.set(MEDUSA_VSS_ATTR_NAME, vs)
+    }
+
     pub fn clear_vs_see(&mut self) -> Result<(), AttributeError> {
         let vss = self.attributes.get_mut(MEDUSA_VSS_ATTR_NAME)?;
         vss.fill(0);
@@ -153,9 +173,13 @@ impl MedusaClass {
         Ok(())
     }
 
-    pub fn add_object_act(&mut self, n: usize) -> Result<(), AttributeError> {
+    fn add_act(act: &mut [u8], bit: usize) {
+        act[bit / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (bit & MEDUSA_BITMAP_BLOCK_MASK);
+    }
+
+    pub fn add_object_act(&mut self, bit: usize) -> Result<(), AttributeError> {
         let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME)?;
-        oact[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
+        Self::add_act(oact, bit);
 
         Ok(())
     }
@@ -174,9 +198,9 @@ impl MedusaClass {
         Ok(())
     }
 
-    pub fn add_subject_act(&mut self, n: usize) -> Result<(), AttributeError> {
+    pub fn add_subject_act(&mut self, bit: usize) -> Result<(), AttributeError> {
         let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME)?;
-        sact[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
+        Self::add_act(sact, bit);
 
         Ok(())
     }
@@ -195,12 +219,27 @@ impl MedusaClass {
         Ok(())
     }
 
+    pub fn set_object_cinfo(&mut self, cinfo: usize) -> Result<(), AttributeError> {
+        self.set_attribute(MEDUSA_OCINFO_ATTR_NAME, cinfo.to_le_bytes().to_vec())
+    }
+
+    pub fn get_object_cinfo(&self) -> Option<usize> {
+        let cinfo_b = self.get_attribute(MEDUSA_OCINFO_ATTR_NAME)?;
+        Some(usize::from_le_bytes(
+            cinfo_b[..std::mem::size_of::<usize>()].try_into().unwrap(),
+        ))
+    }
+
+    pub fn get_vs(&self) -> Option<&[u8]> {
+        self.get_attribute(MEDUSA_VS_ATTR_NAME)
+    }
+
     // TODO set_attribute_-> Result<(), AttributeError> {unsigned,signed,string,bitmap,bytes}
     pub fn set_attribute(&mut self, attr_name: &str, data: Vec<u8>) -> Result<(), AttributeError> {
         self.attributes.set(attr_name, data)
     }
 
-    pub fn get_attribute(&self, attr_name: &str) -> Result<&[u8], AttributeError> {
+    pub fn get_attribute(&self, attr_name: &str) -> Option<&[u8]> {
         self.attributes.get(attr_name)
     }
 
@@ -305,14 +344,31 @@ impl MedusaAttribute {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Monitoring {
+    Subject,
+    Object,
+}
+
+impl Default for Monitoring {
+    fn default() -> Self {
+        Self::Subject
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct MedusaEvtypeHeader {
     evid: u64,
     size: u16,
-    actbit: u16,
+
+    //actbit: u16,
+    monitoring: Monitoring,
+    monitoring_bit: u16,
+
     //ev_kclass: [u64; 2],
     ev_sub: u64,
     ev_obj: Option<NonZeroU64>,
+
     name: String,
     ev_name: [String; 2],
 }
@@ -340,7 +396,7 @@ pub struct MedusaEvtype {
 }
 
 impl MedusaEvtype {
-    pub fn get_attribute(&self, attr_name: &str) -> Result<&[u8], AttributeError> {
+    pub fn get_attribute(&self, attr_name: &str) -> Option<&[u8]> {
         self.attributes.get(attr_name)
     }
 
@@ -370,13 +426,8 @@ impl MedusaAttributes {
         Ok(())
     }
 
-    fn get(&self, attr_name: &str) -> Result<&[u8], AttributeError> {
-        let attr = self
-            .inner
-            .get(attr_name)
-            .ok_or_else(|| AttributeError::UnknownAttribute(attr_name.to_owned()))?;
-
-        Ok(&attr.data)
+    fn get(&self, attr_name: &str) -> Option<&[u8]> {
+        self.inner.get(attr_name).map(|x| &x.data[..])
     }
 
     fn get_mut(&mut self, attr_name: &str) -> Result<&mut [u8], AttributeError> {
@@ -492,10 +543,11 @@ pub struct FetchAnswer {
 }
 
 #[repr(u16)]
+#[derive(Clone, Copy, Debug)]
 pub enum MedusaAnswer {
     Err = u16::MAX,
     Yes = 0,
-    No,
+    Deny,
     Skip,
     Ok,
 }

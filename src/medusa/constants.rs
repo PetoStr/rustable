@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use bitflags::bitflags;
 
 pub const MEDUSA_COMM_KCLASSNAME_MAX: usize = 32 - 2;
@@ -19,6 +21,17 @@ pub const MEDUSA_COMM_UPDATE_ANSWER: u32 = 0x0a;
 pub const MEDUSA_COMM_FETCH_REQUEST: u64 = 0x88;
 pub const MEDUSA_COMM_UPDATE_REQUEST: u64 = 0x8a;
 pub const MEDUSA_COMM_AUTHANSWER: u64 = 0x81;
+
+pub const ACTBIT_FLAGS_MASK: u16 = 0xc000;
+
+pub const MEDUSA_EVTYPE_TRIGGEREDATSUBJECT: u16 = 0x0000;
+pub const MEDUSA_EVTYPE_TRIGGEREDATOBJECT: u16 = 0x8000;
+
+pub const MEDUSA_EVTYPE_TRIGGEREDBYSUBJECTBIT: u16 = 0x0000;
+pub const MEDUSA_EVTYPE_TRIGGEREDBYOBJECTBIT: u16 = 0x4000;
+
+pub const MEDUSA_ACCTYPE_TRIGGEREDATOBJECT: u16 =
+    MEDUSA_EVTYPE_TRIGGEREDATOBJECT | MEDUSA_EVTYPE_TRIGGEREDBYOBJECTBIT;
 
 bitflags! {
     #[derive(Default)]
@@ -76,7 +89,7 @@ impl TryFrom<u8> for AttributeDataType {
     }
 }
 
-pub const MEDUSA_BITMAP_BLOCK_SIZE: usize = 8;
+pub const MEDUSA_BITMAP_BLOCK_SIZE: usize = 1 << 3;
 pub const MEDUSA_BITMAP_BLOCK_MASK: usize = MEDUSA_BITMAP_BLOCK_SIZE - 1;
 
 pub const MEDUSA_VS_ATTR_NAME: &str = "vs";
@@ -85,3 +98,4 @@ pub const MEDUSA_VSW_ATTR_NAME: &str = "vsw";
 pub const MEDUSA_VSS_ATTR_NAME: &str = "vss";
 pub const MEDUSA_OACT_ATTR_NAME: &str = "med_oact";
 pub const MEDUSA_SACT_ATTR_NAME: &str = "med_sact";
+pub const MEDUSA_OCINFO_ATTR_NAME: &str = "o_cinfo";

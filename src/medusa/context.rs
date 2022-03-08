@@ -1,5 +1,7 @@
+use crate::medusa::config::Config;
 use crate::medusa::{
-    FetchAnswer, MedusaClass, MedusaEvtype, MedusaRequest, RequestType, UpdateAnswer, Writer,
+    AuthRequestData, FetchAnswer, MedusaClass, MedusaEvtype, MedusaRequest, Monitoring,
+    RequestType, UpdateAnswer, Writer,
 };
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -18,11 +20,13 @@ pub struct SharedContext {
 
     pub(crate) writer: Writer,
 
+    pub(crate) config: Config,
+
     request_id_cn: AtomicU64,
 }
 
 impl SharedContext {
-    pub(crate) fn new(writer: Writer) -> Self {
+    pub(crate) fn new(writer: Writer, config: Config) -> Self {
         Self {
             classes: DashMap::new(),
             evtypes: DashMap::new(),
@@ -31,8 +35,65 @@ impl SharedContext {
             class_id: DashMap::new(),
             evtype_id: DashMap::new(),
             writer,
+            config,
             request_id_cn: AtomicU64::new(111),
         }
+    }
+
+    pub async fn enter_tree(
+        &self,
+        auth_data: &mut AuthRequestData,
+        primary_tree: &str,
+        path: &str,
+    ) {
+        assert!(path.starts_with('/'));
+
+        let tree = self
+            .config
+            .tree_by_name(primary_tree)
+            .unwrap_or_else(|| panic!("primary tree `{}` not found", primary_tree));
+
+        let mut node = tree.root();
+        for part in path.split_terminator('/') {
+            node = node.child_by_path(part).unwrap();
+        }
+
+        let _ = auth_data.subject.clear_object_act();
+        let _ = auth_data.subject.clear_subject_act();
+
+        let cinfo = Arc::as_ptr(node) as usize;
+
+        println!(
+            "{}: \"{}\" -> \"{}\"",
+            auth_data.evtype.header.name,
+            path,
+            node.path()
+        );
+
+        let _ = auth_data
+            .subject
+            .set_vs(node.virtual_space().to_member_bytes());
+        let _ = auth_data
+            .subject
+            .set_vs_read(node.virtual_space().to_read_bytes());
+        let _ = auth_data
+            .subject
+            .set_vs_write(node.virtual_space().to_write_bytes());
+        let _ = auth_data
+            .subject
+            .set_vs_see(node.virtual_space().to_see_bytes());
+        if node.has_children() && auth_data.evtype.header.monitoring == Monitoring::Object {
+            let _ = auth_data
+                .subject
+                .add_object_act(auth_data.evtype.header.monitoring_bit as usize);
+            let _ = auth_data
+                .subject
+                .add_subject_act(auth_data.evtype.header.monitoring_bit as usize);
+        }
+
+        auth_data.subject.set_object_cinfo(cinfo).unwrap();
+
+        self.update_object(&auth_data.subject).await;
     }
 
     pub fn class_id_from_name(&self, class_name: &str) -> Option<u64> {
@@ -61,6 +122,17 @@ impl SharedContext {
     pub fn empty_evtype(&self, evtype_name: &str) -> Option<MedusaEvtype> {
         let evtype_id = self.evtype_id_from_name(evtype_name)?;
         self.empty_evtype_from_id(&evtype_id)
+    }
+
+    pub fn update_object_no_wait(&self, object: &MedusaClass) {
+        let req = MedusaRequest {
+            req_type: RequestType::Update,
+            class_id: object.header.id,
+            id: self.get_new_request_id(),
+            data: &object.pack_attributes(),
+        };
+
+        self.writer.write(Arc::from(req.to_vec()));
     }
 
     pub async fn update_object(&self, object: &MedusaClass) -> UpdateAnswer {
@@ -96,6 +168,6 @@ impl SharedContext {
     }
 
     fn get_new_request_id(&self) -> u64 {
-        self.request_id_cn.fetch_add(1, Ordering::Relaxed)
+        self.request_id_cn.fetch_add(1, Ordering::SeqCst)
     }
 }

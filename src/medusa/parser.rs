@@ -30,12 +30,22 @@ pub fn parse_evtype_header(i: &[u8]) -> IResult<&[u8], MedusaEvtypeHeader> {
     let (i, name) = take(MEDUSA_COMM_EVNAME_MAX)(i)?;
     let (i, ev_name1) = take(MEDUSA_COMM_ATTRNAME_MAX)(i)?;
     let (i, ev_name2) = take(MEDUSA_COMM_ATTRNAME_MAX)(i)?;
+
+    let monitoring = if actbit & MEDUSA_ACCTYPE_TRIGGEREDATOBJECT != 0 {
+        Monitoring::Object
+    } else {
+        Monitoring::Subject
+    };
+    let monitoring_bit = actbit & !ACTBIT_FLAGS_MASK;
+    //println!("{}: actbit={:0x}, monitoring_bit={}", cstr_to_string(name), actbit, monitoring_bit);
+
     Ok((
         i,
         MedusaEvtypeHeader {
             evid,
             size,
-            actbit,
+            monitoring,
+            monitoring_bit,
             ev_sub,
             ev_obj: NonZeroU64::new(ev_obj),
             name: cstr_to_string(name),

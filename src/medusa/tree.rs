@@ -1,175 +1,200 @@
 #![allow(dead_code)]
 
-use crate::medusa::{EventHandler, TreeError};
-use derivative::Derivative;
+use crate::medusa::space::{Space, SpaceDef, VirtualSpace};
+use crate::medusa::ConfigError;
 use regex::Regex;
-use std::cell::RefCell;
-use std::path::Path;
-use std::rc::Rc;
+use std::collections::HashMap;
+use std::sync::Arc;
 
-#[derive(Derivative)]
-#[derivative(Debug)]
-struct Node {
-    name: String,
+#[derive(Debug)]
+pub struct Node {
     path_regex: Regex,
 
-    #[derivative(Debug = "ignore")]
-    handler: Option<Box<dyn EventHandler>>,
+    vs: VirtualSpace,
 
-    children: Box<[Node]>,
+    children: Box<[Arc<Node>]>,
+}
+
+impl Node {
+    pub fn builder() -> NodeBuilder {
+        NodeBuilder::new()
+    }
+
+    pub(crate) fn path(&self) -> &str {
+        self.path_regex.as_str()
+    }
+
+    pub(crate) fn has_children(&self) -> bool {
+        self.children.len() > 0
+    }
+
+    pub(crate) fn child_by_path(&self, path: &str) -> Option<&Arc<Node>> {
+        self.children.iter().find(|x| x.path_regex.is_match(path))
+    }
+
+    pub(crate) fn virtual_space(&self) -> &VirtualSpace {
+        &self.vs
+    }
 }
 
 #[derive(Debug)]
 pub struct Tree {
-    event: String,
-    attribute: Option<String>,
-
-    root: Node,
+    name: String,
+    root: Arc<Node>,
 }
 
 impl Tree {
-    pub fn builder(event: &str) -> TreeBuilder {
-        TreeBuilder::new(event, None)
+    pub fn builder() -> TreeBuilder {
+        TreeBuilder::new()
     }
 
-    pub fn builder_with_attribute(event: &str, attribute: &str) -> TreeBuilder {
-        TreeBuilder::new(event, Some(attribute))
+    pub fn name(&self) -> &str {
+        self.name.as_str()
     }
 
-    pub fn handler_by_path(&self, path: &str) -> Option<&dyn EventHandler> {
-        println!("handler_by_path \"{}\"", path);
-        let mut res = None;
-        let mut cur_node = &self.root;
-        let iter = Path::new(path).iter();
-
-        for cur_val in iter.map(|x| x.to_str().unwrap()) {
-            let mut search = false;
-
-            for child in cur_node.children.iter() {
-                if child.path_regex.is_match(cur_val) {
-                    cur_node = child;
-                    res = cur_node.handler.as_deref();
-                    search = true;
-                    break;
-                }
-            }
-
-            if !search {
-                break;
-            }
-        }
-        println!("{:?}", cur_node);
-        println!("handler found: {}\n", res.is_some());
-
-        res
-    }
-
-    pub fn event(&self) -> &str {
-        &self.event
-    }
-
-    pub fn attribute(&self) -> Option<&str> {
-        self.attribute.as_deref()
+    pub(crate) fn root(&self) -> &Arc<Node> {
+        &self.root
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug, Default)]
-struct NodeBuilder {
-    name: String,
+#[derive(Debug, Default)]
+pub struct NodeBuilder {
     path: String,
 
-    #[derivative(Debug = "ignore")]
-    handler: Option<Box<dyn EventHandler>>,
+    member_of: Vec<Space>,
+    reads: Vec<Space>,
+    writes: Vec<Space>,
+    sees: Vec<Space>,
 
-    parent: Option<Rc<RefCell<NodeBuilder>>>,
-    children: Vec<Rc<RefCell<NodeBuilder>>>,
+    children: Vec<NodeBuilder>,
 }
 
 impl NodeBuilder {
-    fn build(&mut self) -> Result<Node, TreeError> {
-        let name = self.name.clone();
-        let path_regex = Regex::new(&self.path)?;
-        let handler = self.handler.take();
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn path(mut self, path: &str) -> Self {
+        self.path = path.to_owned();
+        self
+    }
+
+    pub fn member_of(mut self, name: &str) -> Self {
+        self.member_of.push(Space::ByName(name.to_owned()));
+        self
+    }
+
+    pub fn reads(mut self, name: &str) -> Self {
+        self.reads.push(Space::ByName(name.to_owned()));
+        self
+    }
+
+    pub fn writes(mut self, name: &str) -> Self {
+        self.writes.push(Space::ByName(name.to_owned()));
+        self
+    }
+
+    pub fn sees(mut self, name: &str) -> Self {
+        self.sees.push(Space::ByName(name.to_owned()));
+        self
+    }
+
+    pub fn add_node(mut self, node: NodeBuilder) -> Self {
+        self.children.push(node);
+        self
+    }
+
+    // these functions below create a new node in constable
+    /*pub fn include_path(mut self, path: &str) -> Self {
+        self
+    }
+
+    pub fn exclude_path(mut self, path: &str) -> Self {
+        self
+    }
+
+    pub fn include_space(mut self, path: &str) -> Self {
+        self
+    }
+
+    pub fn exclude_space(mut self, path: &str) -> Self {
+        self
+    }*/
+
+    fn build(
+        self,
+        def: &mut SpaceDef,
+        cinfo: &mut HashMap<usize, Arc<Node>>,
+    ) -> Result<Arc<Node>, ConfigError> {
         let children = self
             .children
-            .iter()
-            .map(|x| x.borrow_mut().build())
+            .into_iter()
+            .map(|x| x.build(def, cinfo))
             .collect::<Result<_, _>>()?;
 
-        Ok(Node {
-            name,
+        let path_regex = Regex::new(&self.path)?;
+
+        // define new spaces which may not exist yet
+        self.member_of
+            .iter()
+            .for_each(|space| def.define_space(space.clone()));
+        self.reads
+            .iter()
+            .for_each(|space| def.define_space(space.clone()));
+        self.writes
+            .iter()
+            .for_each(|space| def.define_space(space.clone()));
+        self.sees
+            .iter()
+            .for_each(|space| def.define_space(space.clone()));
+
+        let mut vs = VirtualSpace::new();
+        vs.set_member(def, &self.member_of);
+        vs.set_read(def, &self.reads);
+        vs.set_write(def, &self.writes);
+        vs.set_see(def, &self.sees);
+
+        let node = Arc::new(Node {
             path_regex,
-            handler,
+            vs,
             children,
-        })
+        });
+
+        cinfo.insert(Arc::as_ptr(&node) as usize, Arc::clone(&node));
+
+        Ok(node)
     }
 }
 
 #[derive(Default)]
 pub struct TreeBuilder {
-    event: String,
-    attribute: Option<String>,
-
-    cur: Rc<RefCell<NodeBuilder>>,
+    name: String,
+    root: NodeBuilder,
 }
 
 impl TreeBuilder {
-    pub fn new(event: &str, attribute: Option<&str>) -> Self {
-        Self {
-            event: event.to_owned(),
-            attribute: attribute.map(|x| x.to_owned()),
-            ..Default::default()
-        }
+    pub fn new() -> Self {
+        Default::default()
     }
 
-    pub fn begin_node(mut self, name: &str, path: &str) -> Self {
-        let child = Rc::new(RefCell::new(NodeBuilder {
-            name: name.to_owned(),
-            path: path.to_owned(),
-            handler: None,
-            parent: Some(Rc::clone(&self.cur)),
-            children: Vec::new(),
-        }));
-
-        let res = Rc::clone(&child);
-        self.cur.borrow_mut().children.push(child);
-
-        self.cur = res;
+    pub fn name(mut self, name: &str) -> Self {
+        self.name = name.to_owned();
         self
     }
 
-    pub fn with_handler<H>(self, handler: H) -> Self
-    where
-        H: EventHandler,
-    {
-        self.cur.borrow_mut().handler = Some(Box::new(handler));
+    pub fn set_root(mut self, root: NodeBuilder) -> Self {
+        self.root = root;
         self
     }
 
-    pub fn end_node(mut self) -> Result<Self, TreeError> {
-        let parent = Rc::clone(
-            self.cur
-                .borrow()
-                .parent
-                .as_ref()
-                .ok_or(TreeError::UnexpectedEndNode)?,
-        );
-        self.cur = parent;
-        Ok(self)
-    }
-
-    pub fn build(self) -> Result<Tree, TreeError> {
-        let mut cur = self.cur.borrow_mut();
-        if cur.parent.is_some() {
-            return Err(TreeError::NotAtRootLevel);
-        }
-
-        let root = cur.build()?;
+    pub(crate) fn build(
+        self,
+        def: &mut SpaceDef,
+        cinfo: &mut HashMap<usize, Arc<Node>>,
+    ) -> Result<Tree, ConfigError> {
         Ok(Tree {
-            event: self.event,
-            attribute: self.attribute,
-            root,
+            name: self.name,
+            root: self.root.build(def, cinfo)?,
         })
     }
 }

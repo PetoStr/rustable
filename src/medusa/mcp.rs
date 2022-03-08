@@ -1,4 +1,3 @@
-use crate::cstr_to_string;
 use crate::medusa::constants::*;
 use crate::medusa::{
     AsyncReader, AuthRequestData, Command, CommunicationError, Config, ConnectionError,
@@ -28,7 +27,6 @@ lazy_static! {
 }
 
 pub struct Connection<R: Read + Unpin> {
-    config: Arc<Config>,
     // TODO endian based reader
     reader: NativeByteOrderReader<R>,
     context: Arc<SharedContext>,
@@ -47,7 +45,7 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
 
         let writer = Writer::new(write_handle);
 
-        let context = Arc::new(SharedContext::new(writer));
+        let context = Arc::new(SharedContext::new(writer, config));
 
         let greeting = reader.read_u64().await?;
         println!("greeting = 0x{:016x}", greeting);
@@ -68,11 +66,7 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
 
         println!();
 
-        Ok(Self {
-            config: Arc::new(config),
-            reader,
-            context,
-        })
+        Ok(Self { reader, context })
     }
 
     pub async fn run(&mut self) -> Result<(), CommunicationError> {
@@ -85,13 +79,13 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
 
             if id == 0 {
                 let cmd = self.reader.read_command().await?;
-                println!(
+                /*println!(
                     "cmd(0x{:x}) = {}",
                     cmd,
                     COMMS
                         .get(&cmd)
                         .ok_or(CommunicationError::UnknownCommand(cmd))?
-                );
+                );*/
                 match cmd {
                     MEDUSA_COMM_KCLASSDEF => {
                         self.register_class().await?;
@@ -112,49 +106,37 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
                 }
             } else {
                 let auth_data = self.acquire_auth_req_data(id).await?;
-                println!("{:#?}", auth_data);
                 self.handle_event(auth_data);
             }
-
-            println!();
         }
     }
 
     fn handle_event(&self, auth_data: AuthRequestData) {
-        let context = Arc::clone(&self.context);
-        let config = Arc::clone(&self.config);
+        let ctx = Arc::clone(&self.context);
 
         tokio::spawn(async move {
             let request_id = auth_data.request_id;
 
-            async fn get_answer(
-                config: &Config,
-                context: &SharedContext,
-                auth_data: AuthRequestData,
-            ) -> Option<MedusaAnswer> {
-                let tree = config.tree_by_event(auth_data.evtype.name())?;
-                let path = tree
-                    .attribute()
-                    .map(|attr_name| {
-                        auth_data
-                            .evtype
-                            .get_attribute(attr_name)
-                            .ok()
-                            .map(cstr_to_string)
-                    })
-                    .flatten()
-                    .unwrap_or_else(|| "/".to_owned());
-                let handler = tree.handler_by_path(&path)?;
+            let event = auth_data.evtype.name();
+            let event_handlers = ctx.config.handlers_by_event(event);
 
-                Some(handler.handle(context, auth_data).await)
+            let subject = &auth_data.subject;
+            let object = &auth_data.object;
+
+            let mut answer = DEFAULT_ANSWER;
+            // call only the first matching handler
+            if let Some(event_handlers) = event_handlers {
+                for event_handler in event_handlers {
+                    if event_handler.is_applicable(subject, object.as_ref()) {
+                        answer = event_handler.handle(&ctx, auth_data).await;
+                        break;
+                    }
+                }
             }
 
-            let status = get_answer(&config, &context, auth_data)
-                .await
-                .unwrap_or(DEFAULT_ANSWER) as u16;
-
+            let status = answer as u16;
             let decision = DecisionAnswer { request_id, status };
-            context.writer.write(Arc::from(decision.to_vec()));
+            ctx.writer.write(Arc::from(decision.to_vec()));
         });
     }
 
@@ -162,7 +144,7 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
         &mut self,
         id: u64,
     ) -> Result<AuthRequestData, CommunicationError> {
-        println!("Medusa auth request, id = 0x{:x}", id);
+        //println!("Medusa auth request, id = 0x{:x}", id);
 
         let mut evtype = self
             .context
@@ -170,8 +152,6 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
             .ok_or(CommunicationError::UnknownAccessType(id))?;
 
         let request_id = self.reader.read_u64().await?;
-        println!("request_id = 0x{:x}", request_id);
-        println!("evtype name = {}", evtype.header.name());
 
         let mut ev_attrs_raw = vec![0; evtype.header.size as usize];
         self.reader.read_exact(&mut ev_attrs_raw).await?;
@@ -185,7 +165,6 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
             .context
             .empty_class_from_id(&ev_sub)
             .ok_or(CommunicationError::UnknownSubjectType(ev_sub))?;
-        println!("sub_type name = {}", subject.header.name());
 
         // there seems to be padding so store into buffer first
         let mut sub_attrs_raw = vec![0; subject.header.size as usize];
@@ -199,11 +178,9 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
                     .context
                     .empty_class_from_id(&ev_obj)
                     .ok_or(CommunicationError::UnknownObjectType(ev_obj))?;
-                println!("obj_type name = {}", object.header.name());
 
                 let mut obj_attrs_raw = vec![0; object.header.size as usize];
                 self.reader.read_exact(&mut obj_attrs_raw).await?;
-                println!("obj = {:?}", obj_attrs_raw);
                 object.attributes.set_from_raw(&obj_attrs_raw);
 
                 Some(object)
@@ -221,17 +198,12 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
 
     async fn register_class(&mut self) -> Result<(), CommunicationError> {
         let mut class = self.reader.read_class().await?;
-        let size = class.header.size; // copy so there's no UB when referencing packed struct field
         let name = class.header.name().to_owned();
-        println!("class name = {}, size = {}", name, size);
 
         let attrs = self.reader.read_attributes().await?;
-        println!("attributes:");
         for attr in attrs {
-            println!("{:#?}", attr.header);
             class.attributes.push(attr);
         }
-        println!();
 
         self.context.class_id.insert(name, class.header.id);
         self.context.classes.insert(class.header.id, class);
@@ -245,41 +217,16 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
         let ev_obj = evtype.header.ev_obj.expect("ev_obj is 0").get(); // should always be non-zero from medusa
         let name = evtype.header.name().to_owned();
 
-        println!("evtype name = {}, size = {}", name, evtype.header.size);
-        println!("sub = 0x{:x}, obj = 0x{:x}", ev_sub, ev_obj);
-
-        let sub_type = self
-            .context
-            .empty_class_from_id(&ev_sub)
-            .ok_or(CommunicationError::UnknownSubjectType(ev_sub))?;
-        let obj_type = self
-            .context
-            .empty_class_from_id(&ev_obj)
-            .ok_or(CommunicationError::UnknownObjectType(ev_obj))?;
-        println!(
-            "sub name = {}, obj name = {}",
-            sub_type.header.name(),
-            obj_type.header.name()
-        );
-        println!(
-            "ev_name0 = {}, ev_name1 = {}",
-            evtype.header.ev_name[0], evtype.header.ev_name[1]
-        );
-        println!("actbit = 0x{:x}", { evtype.header.actbit });
-
         if ev_sub == ev_obj && evtype.header.ev_name[0] == evtype.header.ev_name[1] {
             evtype.header.ev_obj = None;
             evtype.header.ev_name[1] = String::new();
         }
 
         let attrs = self.reader.read_attributes().await?;
-        println!("attributes:");
         for attr in attrs {
-            println!("{:#?}", attr.header);
             evtype.attributes.push(attr);
         }
 
-        println!("evid = 0x{:x}", { evtype.header.evid });
         self.context.evtype_id.insert(name, evtype.header.evid);
         self.context.evtypes.insert(evtype.header.evid, evtype);
 
@@ -288,9 +235,8 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
 
     async fn handle_update_answer(&mut self) -> Result<(), CommunicationError> {
         let ans = self.reader.read_update_answer().await?;
-        match self.context.update_requests.remove(&{ ans.msg_seq }) {
-            Some((_, sender)) => sender.send(ans).expect("channel is disconnected"),
-            None => println!("ignored update answer = {:#?}", ans),
+        if let Some((_, sender)) = self.context.update_requests.remove(&{ ans.msg_seq }) {
+            sender.send(ans).expect("channel is disconnected");
         }
 
         Ok(())
@@ -298,9 +244,8 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
 
     async fn handle_fetch_answer(&mut self) -> Result<(), CommunicationError> {
         let ans = self.reader.read_fetch_answer(&self.context.classes).await?;
-        match self.context.fetch_requests.remove(&ans.msg_seq) {
-            Some((_, sender)) => sender.send(ans).expect("channel is disconnected"),
-            None => println!("ignored fetch answer = {:#?}", ans),
+        if let Some((_, sender)) = self.context.fetch_requests.remove(&ans.msg_seq) {
+            sender.send(ans).expect("channel is disconnected");
         }
 
         Ok(())

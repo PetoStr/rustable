@@ -2,92 +2,102 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use rustable::cstr_to_string;
 use rustable::medusa::{
-    AuthRequestData, Config, Connection, EventHandler, MedusaAnswer, SharedContext, Tree, TreeError,
+    AuthRequestData, Config, ConfigError, Connection, EventHandler, Handler, HandlerData,
+    MedusaAnswer, Node, SharedContext, Space, Tree,
 };
 use std::fs::OpenOptions;
 
 const MEDUSA_FILE_NAME: &str = "/dev/medusa";
 
-struct SampleFsHandler;
+struct SampleGetProcessHandler;
 
 #[async_trait]
-impl EventHandler for SampleFsHandler {
-    async fn handle(&self, ctx: &SharedContext, auth_data: AuthRequestData) -> MedusaAnswer {
-        println!("sample fs handler");
-
-        let mut subject = auth_data.subject;
-        subject.clear_object_act().unwrap();
-
-        let update_answer = ctx.update_object(&subject).await;
-        println!("update_answer = {:?}\n", update_answer);
-
-        MedusaAnswer::Ok
-    }
-}
-
-struct SampleProcessHandler;
-
-#[async_trait]
-impl EventHandler for SampleProcessHandler {
-    async fn handle(&self, ctx: &SharedContext, auth_data: AuthRequestData) -> MedusaAnswer {
+impl Handler for SampleGetProcessHandler {
+    async fn handle(
+        &self,
+        _: &HandlerData,
+        ctx: &SharedContext,
+        mut auth_data: AuthRequestData,
+    ) -> MedusaAnswer {
         println!("sample process handler");
 
-        let mut subject = auth_data.subject;
+        let subject = &auth_data.subject;
         println!(
             "subject cmdline = {}",
             cstr_to_string(subject.get_attribute("cmdline").unwrap())
         );
 
-        subject.clear_object_act().unwrap();
-        subject.clear_subject_act().unwrap();
-
-        let update_answer = ctx.update_object(&subject).await;
-        println!("update_answer = {:?}\n", update_answer);
+        ctx.enter_tree(&mut auth_data, "domains", "/").await;
 
         MedusaAnswer::Ok
     }
 }
 
 #[rustfmt::skip]
-fn create_config() -> Result<Config, TreeError> {
+fn create_config() -> Result<Config, ConfigError> {
     // TODO simplify by making a macro?
-    let fs = Tree::builder_with_attribute("getfile", "filename")
-        .begin_node("name0", "/")
-            .with_handler(SampleFsHandler)
-
-            .begin_node("name1", "usr")
-                .begin_node("name2", "bin")
-                    .begin_node("name2", r".*")
-                        .with_handler(SampleFsHandler)
-                    .end_node()?
-                .end_node()?
-            .end_node()?
-
-            .begin_node("name3", "share")
-            .end_node()?
-
-            .begin_node("name4", "bin")
-            .end_node()?
-
-        .end_node()?
-        .build()?;
-
-    let domain = Tree::builder("getprocess")
-        .begin_node("name5", r".*")
-            .with_handler(SampleProcessHandler)
-        .end_node()?
-        .build()?;
-
-    Ok(Config::builder()
-        .add_tree(fs)
-        .add_tree(domain)
-        .build())
+    Config::builder()
+        .add_tree(Tree::builder()
+            .name("fs")
+            .set_root(Node::builder()
+                .path("/")
+                .member_of("all_files")
+                .add_node(Node::builder()
+                    .path(r"home")
+                    .member_of("home")
+                    .add_node(Node::builder()
+                        .path(r"roderik")
+                        .member_of("home")
+                        .add_node(Node::builder()
+                            .path(r"1")
+                        )
+                        .add_node(Node::builder()
+                            .path(r".*")
+                            .member_of("home")
+                        )
+                    )
+                )
+                .add_node(Node::builder()
+                    .path(r"tmp")
+                    .member_of("all_files")
+                    .member_of("tmp")
+                )
+                .add_node(Node::builder()
+                    .path(r".*")
+                    .member_of("all_files")
+                )
+            )
+        )
+        .add_tree(Tree::builder()
+            .name("domains")
+            .set_root(Node::builder()
+                .path("/")
+                .add_node(Node::builder()
+                    .path(r".*")
+                    .member_of("all_domains")
+                    .reads("all_domains")
+                    .reads("all_files")
+                    .writes("all_domains")
+                    .writes("all_files")
+                    .sees("all_domains")
+                    .sees("all_files")
+                )
+            )
+        )
+        .add_event_handler(EventHandler::builder()
+            .event("getfile")
+            .with_hierarchy_handler(Some("filename"), true, "fs")
+        )
+        .add_event_handler(EventHandler::builder()
+            .event("getprocess")
+            .with_custom_handler(SampleGetProcessHandler, Space::All, None)
+        )
+        .build()
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = create_config().context("Failed to create config")?;
-    println!("{:?}", config);
 
     let write_handle = OpenOptions::new()
         .read(true)

@@ -3,13 +3,9 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 #[non_exhaustive]
-pub enum TreeError {
+pub enum ConfigError {
     #[error(transparent)]
-    InvalidRegex(#[from] regex::Error),
-    #[error("unexpected call to end_node() before begin_node()")]
-    UnexpectedEndNode,
-    #[error("end_node() was not called after begin_node()")]
-    NotAtRootLevel,
+    InvalidRegexError(#[from] regex::Error),
 }
 
 #[derive(Error, Debug)]
