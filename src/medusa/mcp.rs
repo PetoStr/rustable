@@ -8,9 +8,6 @@ use std::io::{Read, Write};
 use std::os::unix::io::AsRawFd;
 use std::sync::Arc;
 
-const DEFAULT_ANSWER: MedusaAnswer = MedusaAnswer::Ok;
-const PROTOCOL_VERSION: u64 = 2;
-
 lazy_static! {
     static ref COMMS: HashMap<Command, &'static str> = {
         let mut map = HashMap::new();
@@ -106,33 +103,27 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
                 }
             } else {
                 let auth_data = self.acquire_auth_req_data(id).await?;
-                self.handle_event(auth_data);
+                self.spawn_event_handler(auth_data);
             }
         }
     }
 
-    fn handle_event(&self, auth_data: AuthRequestData) {
+    fn spawn_event_handler(&self, auth_data: AuthRequestData) {
         let ctx = Arc::clone(&self.context);
 
         tokio::spawn(async move {
             let request_id = auth_data.request_id;
 
-            let event = auth_data.evtype.name();
-            let event_handlers = ctx.config.handlers_by_event(event);
+            let ctx = Arc::clone(&ctx);
+            let join_handle = tokio::spawn(get_answer(Arc::clone(&ctx), auth_data)).await;
 
-            let subject = &auth_data.subject;
-            let object = &auth_data.object;
-
-            let mut answer = DEFAULT_ANSWER;
-            // call only the first matching handler
-            if let Some(event_handlers) = event_handlers {
-                for event_handler in event_handlers {
-                    if event_handler.is_applicable(subject, object.as_ref()) {
-                        answer = event_handler.handle(&ctx, auth_data).await;
-                        break;
-                    }
+            let answer = match join_handle {
+                Ok(answer) => answer,
+                Err(error) => {
+                    eprintln!("{}", error);
+                    DEFAULT_ANSWER
                 }
-            }
+            };
 
             let status = answer as u16;
             let decision = DecisionAnswer { request_id, status };
@@ -250,4 +241,25 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
 
         Ok(())
     }
+}
+
+async fn get_answer(ctx: Arc<SharedContext>, auth_data: AuthRequestData) -> MedusaAnswer {
+    let event = auth_data.evtype.name();
+    let event_handlers = ctx.config.handlers_by_event(event);
+
+    let subject = &auth_data.subject;
+    let object = &auth_data.object;
+
+    let mut answer = DEFAULT_ANSWER;
+    // call only the first matching handler
+    if let Some(event_handlers) = event_handlers {
+        for event_handler in event_handlers {
+            if event_handler.is_applicable(subject, object.as_ref()) {
+                answer = event_handler.handle(&ctx, auth_data).await;
+                break;
+            }
+        }
+    }
+
+    answer
 }
