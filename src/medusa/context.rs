@@ -96,6 +96,10 @@ impl SharedContext {
         self.update_object(&auth_data.subject).await;
     }
 
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
     pub fn class_id_from_name(&self, class_name: &str) -> Option<u64> {
         self.class_id.get(class_name).map(|x| *x)
     }

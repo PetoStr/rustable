@@ -30,14 +30,12 @@ impl SpaceDef {
         }
     }
 
-    #[allow(unused)]
-    pub(crate) fn id(&self, name: &str) -> Option<&usize> {
-        self.name_to_id.get(name)
+    pub(crate) fn name_to_id_clone(&self) -> HashMap<String, usize> {
+        self.name_to_id.clone()
     }
 
-    #[allow(unused)]
-    pub(crate) fn name(&self, id: &usize) -> Option<&String> {
-        self.id_to_name.get(id)
+    pub(crate) fn id_to_name_clone(&self) -> HashMap<usize, String> {
+        self.id_to_name.clone()
     }
 
     fn insert_space(&mut self, name: String, id: usize) {

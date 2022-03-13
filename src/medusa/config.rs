@@ -13,6 +13,8 @@ pub struct Config {
     cinfo_nodes: HashMap<usize, Arc<Node>>,
 
     event_handlers: HashMap<String, Box<[EventHandler]>>,
+    name_to_space_bit: HashMap<String, usize>,
+    space_bit_to_name: HashMap<usize, String>,
     // TODO medusa connections, default answer
 }
 
@@ -23,6 +25,14 @@ impl Config {
 
     pub fn tree_by_name(&self, name: &str) -> Option<&Tree> {
         self.trees.iter().find(|x| x.name() == name)
+    }
+
+    pub fn name_to_space_bit(&self, name: &str) -> Option<&usize> {
+        self.name_to_space_bit.get(name)
+    }
+
+    pub fn space_bit_to_name(&self, bit: &usize) -> Option<&String> {
+        self.space_bit_to_name.get(bit)
     }
 
     pub(crate) fn node_by_cinfo(&self, cinfo: &usize) -> Option<&Arc<Node>> {
@@ -75,10 +85,15 @@ impl ConfigBuilder {
             .map(|(k, v)| (k, v.into_iter().map(|x| x.build(&def)).collect()))
             .collect::<HashMap<String, Box<[EventHandler]>>>();
 
+        let name_to_space_bit = def.name_to_id_clone();
+        let space_bit_to_name = def.id_to_name_clone();
+
         Ok(Config {
             trees,
             cinfo_nodes: cinfo,
             event_handlers,
+            name_to_space_bit,
+            space_bit_to_name,
         })
     }
 }
