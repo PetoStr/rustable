@@ -90,7 +90,7 @@ fn create_config() -> Result<Config, ConfigError> {
         )
         .add_event_handler(EventHandler::builder()
             .event("getprocess")
-            .with_custom_handler(SampleGetProcessHandler, Space::All, None)
+            .with_custom_handler(SampleGetProcessHandler, Space::All, Some(Space::All))
         )
         .build()
 }
