@@ -193,9 +193,13 @@ impl Handler for HierarchyHandler {
         let mut cinfo = auth_data.subject.get_object_cinfo().unwrap();
         let mut node;
 
+        let path_attr = data.attribute.as_deref().unwrap_or("");
+        let path = cstr_to_string(auth_data.evtype.get_attribute(path_attr).unwrap_or(b"\0"));
+
         if cinfo == 0 {
             if data.from_object
                 && auth_data.subject.header.id == auth_data.object.as_ref().unwrap().header.id
+                && path != "/" // ignore root's possible parent
             {
                 let parent_cinfo = auth_data
                     .object
@@ -217,9 +221,6 @@ impl Handler for HierarchyHandler {
         } else {
             node = config.node_by_cinfo(&cinfo).expect("node not found");
         }
-
-        let path_attr = data.attribute.as_deref().unwrap_or("");
-        let path = cstr_to_string(auth_data.evtype.get_attribute(path_attr).unwrap_or(b"\0"));
 
         // is not root?
         if cinfo != 0 {
