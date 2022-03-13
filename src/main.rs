@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use rustable::cstr_to_string;
 use rustable::medusa::{
     AuthRequestData, Config, ConfigError, Connection, EventHandler, Handler, HandlerData,
     MedusaAnswer, Node, SharedContext, Space, Tree,
@@ -23,8 +22,7 @@ impl Handler for SampleGetProcessHandler {
 
         let subject = &auth_data.subject;
         println!(
-            "subject cmdline = {}",
-            cstr_to_string(subject.get_attribute("cmdline").unwrap())
+            "subject cmdline = {}", subject.get_attribute::<String>("cmdline").unwrap()
         );
 
         ctx.enter_tree(&mut auth_data, "domains", "/").await;

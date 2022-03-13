@@ -220,27 +220,27 @@ impl MedusaClass {
     }
 
     pub fn set_object_cinfo(&mut self, cinfo: usize) -> Result<(), AttributeError> {
-        self.set_attribute(MEDUSA_OCINFO_ATTR_NAME, cinfo.to_le_bytes().to_vec())
+        self.set_attribute(MEDUSA_OCINFO_ATTR_NAME, cinfo)
     }
 
     pub fn get_object_cinfo(&self) -> Option<usize> {
-        let cinfo_b = self.get_attribute(MEDUSA_OCINFO_ATTR_NAME)?;
-        Some(usize::from_le_bytes(
-            cinfo_b[..std::mem::size_of::<usize>()].try_into().unwrap(),
-        ))
+        self.get_attribute::<usize>(MEDUSA_OCINFO_ATTR_NAME)
     }
 
     pub fn get_vs(&self) -> Option<&[u8]> {
-        self.get_attribute(MEDUSA_VS_ATTR_NAME)
+        self.attributes.get(MEDUSA_VS_ATTR_NAME)
     }
 
-    // TODO set_attribute_-> Result<(), AttributeError> {unsigned,signed,string,bitmap,bytes}
-    pub fn set_attribute(&mut self, attr_name: &str, data: Vec<u8>) -> Result<(), AttributeError> {
-        self.attributes.set(attr_name, data)
+    pub fn set_attribute<T: AttributeBytes>(
+        &mut self,
+        attr_name: &str,
+        data: T,
+    ) -> Result<(), AttributeError> {
+        self.attributes.set(attr_name, data.to_bytes())
     }
 
-    pub fn get_attribute(&self, attr_name: &str) -> Option<&[u8]> {
-        self.attributes.get(attr_name)
+    pub fn get_attribute<T: AttributeBytes>(&self, attr_name: &str) -> Option<T> {
+        Some(T::from_bytes(self.attributes.get(attr_name)?.to_vec()))
     }
 
     fn pack_attributes(&self) -> Vec<u8> {
@@ -558,4 +558,48 @@ pub struct AuthRequestData {
     pub evtype: MedusaEvtype,
     pub subject: MedusaClass,
     pub object: Option<MedusaClass>,
+}
+
+pub trait AttributeBytes {
+    fn to_bytes(self) -> Vec<u8>;
+    fn from_bytes(bytes: Vec<u8>) -> Self;
+}
+
+macro_rules! attribute_bytes_impl {
+    ($($t:ty)*) => ($(
+        impl AttributeBytes for $t {
+            fn to_bytes(self) -> Vec<u8> {
+                self.to_le_bytes().to_vec()
+            }
+
+            fn from_bytes(bytes: Vec<u8>) -> $t {
+                <$t>::from_le_bytes(bytes.try_into().unwrap())
+            }
+        }
+    )*)
+}
+
+attribute_bytes_impl! { u8 u16 u32 u64 i8 i16 i32 i64 usize }
+
+impl AttributeBytes for String {
+    fn to_bytes(self) -> Vec<u8> {
+        let mut vec = self.into_bytes();
+        vec.push(0);
+
+        vec
+    }
+
+    fn from_bytes(bytes: Vec<u8>) -> Self {
+        cstr_to_string(&bytes)
+    }
+}
+
+impl AttributeBytes for Vec<u8> {
+    fn to_bytes(self) -> Vec<u8> {
+        self
+    }
+
+    fn from_bytes(bytes: Vec<u8>) -> Self {
+        bytes
+    }
 }
