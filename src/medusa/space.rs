@@ -1,7 +1,7 @@
 use crate::bitmap;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Space {
     All,
     ByName(String),

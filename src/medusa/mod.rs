@@ -460,7 +460,7 @@ impl MedusaAttributes {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RequestType {
     Fetch,
     Update,
@@ -540,7 +540,7 @@ pub struct FetchAnswer {
 }
 
 #[repr(u16)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MedusaAnswer {
     Err = u16::MAX,
     Yes = 0,
