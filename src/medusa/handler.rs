@@ -1,10 +1,17 @@
 use crate::cstr_to_string;
 use crate::medusa::space::{spaces_to_bitvec, Space, SpaceDef};
 use crate::medusa::{AuthRequestData, MedusaAnswer, MedusaClass, Monitoring, SharedContext};
-use async_trait::async_trait;
 use bit_vec::BitVec;
 use derivative::Derivative;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
+
+pub type Handler = for<'a> fn(
+    &'a HandlerData,
+    &'a SharedContext,
+    AuthRequestData,
+) -> Pin<Box<dyn Future<Output = MedusaAnswer> + Send + 'a>>;
 
 #[derive(Debug, Clone)]
 pub struct HandlerData {
@@ -18,14 +25,18 @@ pub struct HandlerData {
     pub object_vs: BitVec,
 }
 
-#[async_trait]
-pub trait Handler {
-    async fn handle(
-        &self,
-        data: &HandlerData,
-        ctx: &SharedContext,
-        auth_data: AuthRequestData,
-    ) -> MedusaAnswer;
+#[macro_export]
+macro_rules! force_boxed {
+    ($inc:expr) => {{
+        fn boxed<'a>(
+            data: &'a HandlerData,
+            ctx: &'a SharedContext,
+            auth_data: AuthRequestData,
+        ) -> Pin<Box<dyn Future<Output = MedusaAnswer> + Send + 'a>> {
+            Box::pin($inc(data, ctx, auth_data))
+        }
+        boxed
+    }};
 }
 
 #[derive(Derivative)]
@@ -40,7 +51,7 @@ pub struct EventHandlerBuilder {
     object: Option<Space>,
 
     #[derivative(Debug = "ignore")]
-    handler: Option<Box<dyn Handler + Send + Sync + 'static>>,
+    handler: Option<Handler>,
 }
 
 impl EventHandlerBuilder {
@@ -68,26 +79,23 @@ impl EventHandlerBuilder {
         self.subject = Some(Space::All);
         self.object = Some(Space::All);
         self.primary_tree = primary_tree.to_owned();
-        self.handler = Some(Box::new(HierarchyHandler));
+        self.handler = Some(force_boxed!(hierarchy_handler));
         self
     }
 
-    pub fn with_custom_handler<H>(
+    pub fn with_custom_handler(
         mut self,
-        handler: H,
+        handler: Handler,
         subject: Space,
         object: Option<Space>,
-    ) -> Self
-    where
-        H: Handler + Send + Sync + 'static,
-    {
+    ) -> Self {
         if self.handler.is_some() {
             panic!("handler already set");
         }
 
         self.subject = Some(subject);
         self.object = object;
-        self.handler = Some(Box::from(handler));
+        self.handler = Some(handler);
         self
     }
 
@@ -122,7 +130,7 @@ pub struct EventHandler {
     data: HandlerData,
 
     #[derivative(Debug = "ignore")]
-    handler: Box<dyn Handler + Send + Sync + 'static>,
+    handler: Handler,
 }
 
 impl EventHandler {
@@ -135,7 +143,7 @@ impl EventHandler {
         ctx: &SharedContext,
         auth_data: AuthRequestData,
     ) -> MedusaAnswer {
-        self.handler.handle(&self.data, ctx, auth_data).await
+        (self.handler)(&self.data, ctx, auth_data).await
     }
 
     pub(crate) fn is_applicable(
@@ -173,99 +181,95 @@ fn bitvec_from_vs_exact(class: &MedusaClass, len: usize) -> BitVec {
     bitvec
 }
 
-struct HierarchyHandler;
+// TODO replace unwraps
+async fn hierarchy_handler(
+    //&self,
+    data: &HandlerData,
+    ctx: &SharedContext,
+    mut auth_data: AuthRequestData,
+) -> MedusaAnswer {
+    let config = &ctx.config;
 
-#[async_trait]
-impl Handler for HierarchyHandler {
-    // TODO replace unwraps
-    async fn handle(
-        &self,
-        data: &HandlerData,
-        ctx: &SharedContext,
-        mut auth_data: AuthRequestData,
-    ) -> MedusaAnswer {
-        let config = &ctx.config;
+    let tree = config
+        .tree_by_name(&data.primary_tree)
+        .unwrap_or_else(|| panic!("primary tree `{}` not found", data.primary_tree));
 
-        let tree = config
-            .tree_by_name(&data.primary_tree)
-            .unwrap_or_else(|| panic!("primary tree `{}` not found", data.primary_tree));
+    let mut cinfo = auth_data.subject.get_object_cinfo().unwrap();
+    let mut node;
 
-        let mut cinfo = auth_data.subject.get_object_cinfo().unwrap();
-        let mut node;
+    let path_attr = data.attribute.as_deref().unwrap_or("");
+    let path = cstr_to_string(auth_data.evtype.get_attribute(path_attr).unwrap_or(b"\0"));
 
-        let path_attr = data.attribute.as_deref().unwrap_or("");
-        let path = cstr_to_string(auth_data.evtype.get_attribute(path_attr).unwrap_or(b"\0"));
+    if cinfo == 0 {
+        if data.from_object
+            && auth_data.subject.header.id == auth_data.object.as_ref().unwrap().header.id
+            && path != "/"
+        // ignore root's possible parent
+        {
+            let parent_cinfo = auth_data
+                .object
+                .as_ref()
+                .unwrap()
+                .get_object_cinfo()
+                .unwrap();
+            cinfo = parent_cinfo;
+        }
 
         if cinfo == 0 {
-            if data.from_object
-                && auth_data.subject.header.id == auth_data.object.as_ref().unwrap().header.id
-                && path != "/" // ignore root's possible parent
-            {
-                let parent_cinfo = auth_data
-                    .object
-                    .as_ref()
-                    .unwrap()
-                    .get_object_cinfo()
-                    .unwrap();
-                cinfo = parent_cinfo;
-            }
-
-            if cinfo == 0 {
-                node = tree.root();
-            } else {
-                node = config.node_by_cinfo(&cinfo).expect("node not found");
-            }
-
-            let _ = auth_data.subject.clear_object_act();
-            let _ = auth_data.subject.clear_subject_act();
+            node = tree.root();
         } else {
             node = config.node_by_cinfo(&cinfo).expect("node not found");
         }
 
-        // is not root?
-        if cinfo != 0 {
-            if let Some(child) = node.child_by_path(&path) {
-                node = child;
-            } else {
-                println!("{} not covered by tree", path);
-                return MedusaAnswer::Deny;
-            }
-        }
-        cinfo = Arc::as_ptr(node) as usize;
-
-        println!(
-            "{}: \"{}\" -> \"{}\"",
-            auth_data.evtype.header.name,
-            path,
-            node.path()
-        );
-
-        let _ = auth_data
-            .subject
-            .set_vs(node.virtual_space().to_member_bytes());
-        let _ = auth_data
-            .subject
-            .set_vs_read(node.virtual_space().to_read_bytes());
-        let _ = auth_data
-            .subject
-            .set_vs_write(node.virtual_space().to_write_bytes());
-        let _ = auth_data
-            .subject
-            .set_vs_see(node.virtual_space().to_see_bytes());
-        if node.has_children() && auth_data.evtype.header.monitoring == Monitoring::Object {
-            let _ = auth_data
-                .subject
-                .add_object_act(auth_data.evtype.header.monitoring_bit as usize);
-            let _ = auth_data
-                .subject
-                .add_subject_act(auth_data.evtype.header.monitoring_bit as usize);
-        }
-
-        auth_data.subject.set_object_cinfo(cinfo).unwrap();
-
-        ctx.update_object_no_wait(&auth_data.subject);
-        //ctx.update_object(&auth_data.subject).await;
-
-        MedusaAnswer::Ok
+        let _ = auth_data.subject.clear_object_act();
+        let _ = auth_data.subject.clear_subject_act();
+    } else {
+        node = config.node_by_cinfo(&cinfo).expect("node not found");
     }
+
+    // is not root?
+    if cinfo != 0 {
+        if let Some(child) = node.child_by_path(&path) {
+            node = child;
+        } else {
+            println!("{} not covered by tree", path);
+            return MedusaAnswer::Deny;
+        }
+    }
+    cinfo = Arc::as_ptr(node) as usize;
+
+    println!(
+        "{}: \"{}\" -> \"{}\"",
+        auth_data.evtype.header.name,
+        path,
+        node.path()
+    );
+
+    let _ = auth_data
+        .subject
+        .set_vs(node.virtual_space().to_member_bytes());
+    let _ = auth_data
+        .subject
+        .set_vs_read(node.virtual_space().to_read_bytes());
+    let _ = auth_data
+        .subject
+        .set_vs_write(node.virtual_space().to_write_bytes());
+    let _ = auth_data
+        .subject
+        .set_vs_see(node.virtual_space().to_see_bytes());
+    if node.has_children() && auth_data.evtype.header.monitoring == Monitoring::Object {
+        let _ = auth_data
+            .subject
+            .add_object_act(auth_data.evtype.header.monitoring_bit as usize);
+        let _ = auth_data
+            .subject
+            .add_subject_act(auth_data.evtype.header.monitoring_bit as usize);
+    }
+
+    auth_data.subject.set_object_cinfo(cinfo).unwrap();
+
+    ctx.update_object_no_wait(&auth_data.subject);
+    //ctx.update_object(&auth_data.subject).await;
+
+    MedusaAnswer::Ok
 }

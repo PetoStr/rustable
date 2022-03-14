@@ -1,34 +1,38 @@
 use anyhow::{Context, Result};
-use async_trait::async_trait;
+use rustable::force_boxed;
 use rustable::medusa::{
-    AuthRequestData, Config, ConfigError, Connection, EventHandler, Handler, HandlerData,
-    MedusaAnswer, Node, SharedContext, Space, Tree,
+    AuthRequestData, Config, ConfigError, Connection, EventHandler, HandlerData, MedusaAnswer,
+    Node, SharedContext, Space, Tree,
 };
 use std::fs::OpenOptions;
+use std::future::Future;
+use std::pin::Pin;
 
 const MEDUSA_FILE_NAME: &str = "/dev/medusa";
 
-struct SampleGetProcessHandler;
+async fn getprocess_handler(
+    _: &HandlerData,
+    ctx: &SharedContext,
+    mut auth_data: AuthRequestData,
+) -> MedusaAnswer {
+    println!("sample process handler");
 
-#[async_trait]
-impl Handler for SampleGetProcessHandler {
-    async fn handle(
-        &self,
-        _: &HandlerData,
-        ctx: &SharedContext,
-        mut auth_data: AuthRequestData,
-    ) -> MedusaAnswer {
-        println!("sample process handler");
+    ctx.enter_tree(&mut auth_data, "domains", "/").await;
 
-        let subject = &auth_data.subject;
-        println!(
-            "subject cmdline = {}", subject.get_attribute::<String>("cmdline").unwrap()
-        );
+    let subject = &mut auth_data.subject;
+    println!(
+        "subject cmdline = {}",
+        subject.get_attribute::<String>("cmdline").unwrap()
+    );
 
         ctx.enter_tree(&mut auth_data, "domains", "/").await;
 
         MedusaAnswer::Ok
     }
+
+    ctx.update_object(subject).await;
+
+    MedusaAnswer::Ok
 }
 
 #[rustfmt::skip]
@@ -88,7 +92,7 @@ fn create_config() -> Result<Config, ConfigError> {
         )
         .add_event_handler(EventHandler::builder()
             .event("getprocess")
-            .with_custom_handler(SampleGetProcessHandler, Space::All, Some(Space::All))
+            .with_custom_handler(force_boxed!(getprocess_handler), Space::All, Some(Space::All))
         )
         .build()
 }
