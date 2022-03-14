@@ -98,9 +98,6 @@ impl TryFrom<u8> for AttributeDataType {
     }
 }
 
-pub const MEDUSA_BITMAP_BLOCK_SIZE: usize = 1 << 3;
-pub const MEDUSA_BITMAP_BLOCK_MASK: usize = MEDUSA_BITMAP_BLOCK_SIZE - 1;
-
 pub const MEDUSA_VS_ATTR_NAME: &str = "vs";
 pub const MEDUSA_VSR_ATTR_NAME: &str = "vsr";
 pub const MEDUSA_VSW_ATTR_NAME: &str = "vsw";

@@ -1,3 +1,4 @@
+use crate::bitmap;
 use crate::cstr_to_string;
 use hashlink::LinkedHashMap;
 use std::fmt;
@@ -75,14 +76,14 @@ pub struct MedusaClass {
 impl MedusaClass {
     pub fn add_vs(&mut self, n: usize) -> Result<(), AttributeError> {
         let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME)?;
-        vs[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
+        bitmap::set_bit(vs, n);
 
         Ok(())
     }
 
     pub fn remove_vs(&mut self, n: usize) -> Result<(), AttributeError> {
         let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME)?;
-        vs[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
+        bitmap::clear_bit(vs, n);
 
         Ok(())
     }
@@ -93,21 +94,21 @@ impl MedusaClass {
 
     pub fn clear_vs(&mut self) -> Result<(), AttributeError> {
         let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME)?;
-        vs.fill(0);
+        bitmap::clear_all(vs);
 
         Ok(())
     }
 
     pub fn add_vs_read(&mut self, n: usize) -> Result<(), AttributeError> {
         let vsr = self.attributes.get_mut(MEDUSA_VSR_ATTR_NAME)?;
-        vsr[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
+        bitmap::set_bit(vsr, n);
 
         Ok(())
     }
 
     pub fn remove_vs_read(&mut self, n: usize) -> Result<(), AttributeError> {
         let vsr = self.attributes.get_mut(MEDUSA_VSR_ATTR_NAME)?;
-        vsr[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
+        bitmap::clear_bit(vsr, n);
 
         Ok(())
     }
@@ -118,21 +119,21 @@ impl MedusaClass {
 
     pub fn clear_vs_read(&mut self) -> Result<(), AttributeError> {
         let vsr = self.attributes.get_mut(MEDUSA_VSR_ATTR_NAME)?;
-        vsr.fill(0);
+        bitmap::clear_all(vsr);
 
         Ok(())
     }
 
     pub fn add_vs_write(&mut self, n: usize) -> Result<(), AttributeError> {
         let vsw = self.attributes.get_mut(MEDUSA_VSW_ATTR_NAME)?;
-        vsw[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
+        bitmap::set_bit(vsw, n);
 
         Ok(())
     }
 
     pub fn remove_vs_write(&mut self, n: usize) -> Result<(), AttributeError> {
         let vsw = self.attributes.get_mut(MEDUSA_VSW_ATTR_NAME)?;
-        vsw[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
+        bitmap::clear_bit(vsw, n);
 
         Ok(())
     }
@@ -143,21 +144,21 @@ impl MedusaClass {
 
     pub fn clear_vs_write(&mut self) -> Result<(), AttributeError> {
         let vsw = self.attributes.get_mut(MEDUSA_VSW_ATTR_NAME)?;
-        vsw.fill(0);
+        bitmap::clear_all(vsw);
 
         Ok(())
     }
 
     pub fn add_vs_see(&mut self, n: usize) -> Result<(), AttributeError> {
         let vss = self.attributes.get_mut(MEDUSA_VSS_ATTR_NAME)?;
-        vss[n / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (n & MEDUSA_BITMAP_BLOCK_MASK);
+        bitmap::set_bit(vss, n);
 
         Ok(())
     }
 
     pub fn remove_vs_see(&mut self, n: usize) -> Result<(), AttributeError> {
         let vss = self.attributes.get_mut(MEDUSA_VSS_ATTR_NAME)?;
-        vss[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
+        bitmap::clear_bit(vss, n);
 
         Ok(())
     }
@@ -168,53 +169,49 @@ impl MedusaClass {
 
     pub fn clear_vs_see(&mut self) -> Result<(), AttributeError> {
         let vss = self.attributes.get_mut(MEDUSA_VSS_ATTR_NAME)?;
-        vss.fill(0);
+        bitmap::clear_all(vss);
 
         Ok(())
     }
 
-    fn add_act(act: &mut [u8], bit: usize) {
-        act[bit / MEDUSA_BITMAP_BLOCK_SIZE] |= 1 << (bit & MEDUSA_BITMAP_BLOCK_MASK);
-    }
-
-    pub fn add_object_act(&mut self, bit: usize) -> Result<(), AttributeError> {
+    pub fn add_object_act(&mut self, n: usize) -> Result<(), AttributeError> {
         let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME)?;
-        Self::add_act(oact, bit);
+        bitmap::set_bit(oact, n);
 
         Ok(())
     }
 
     pub fn remove_object_act(&mut self, n: usize) -> Result<(), AttributeError> {
         let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME)?;
-        oact[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
+        bitmap::clear_bit(oact, n);
 
         Ok(())
     }
 
     pub fn clear_object_act(&mut self) -> Result<(), AttributeError> {
         let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME)?;
-        oact.fill(0);
+        bitmap::clear_all(oact);
 
         Ok(())
     }
 
-    pub fn add_subject_act(&mut self, bit: usize) -> Result<(), AttributeError> {
+    pub fn add_subject_act(&mut self, n: usize) -> Result<(), AttributeError> {
         let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME)?;
-        Self::add_act(sact, bit);
+        bitmap::set_bit(sact, n);
 
         Ok(())
     }
 
     pub fn remove_subject_act(&mut self, n: usize) -> Result<(), AttributeError> {
         let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME)?;
-        sact[n / MEDUSA_BITMAP_BLOCK_SIZE] &= !(1 << (n & MEDUSA_BITMAP_BLOCK_MASK));
+        bitmap::clear_bit(sact, n);
 
         Ok(())
     }
 
     pub fn clear_subject_act(&mut self) -> Result<(), AttributeError> {
         let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME)?;
-        sact.fill(0);
+        bitmap::clear_all(sact);
 
         Ok(())
     }

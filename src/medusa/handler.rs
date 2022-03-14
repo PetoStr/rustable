@@ -1,7 +1,7 @@
+use crate::bitmap;
 use crate::cstr_to_string;
-use crate::medusa::space::{spaces_to_bitvec, Space, SpaceDef};
+use crate::medusa::space::{spaces_to_bitmap, Space, SpaceDef};
 use crate::medusa::{AuthRequestData, MedusaAnswer, MedusaClass, Monitoring, SharedContext};
-use bit_vec::BitVec;
 use derivative::Derivative;
 use std::future::Future;
 use std::pin::Pin;
@@ -21,8 +21,10 @@ pub struct HandlerData {
 
     pub primary_tree: String,
 
-    pub subject_vs: BitVec,
-    pub object_vs: BitVec,
+    pub subject_vs: Vec<u8>,
+    pub object_vs: Vec<u8>,
+
+    bitmap_nbytes: usize,
 }
 
 #[macro_export]
@@ -104,10 +106,11 @@ impl EventHandlerBuilder {
             .handler
             .unwrap_or_else(|| panic!("no handler specified for event: {}", self.event));
 
-        let subject_vs = spaces_to_bitvec(&[self.subject.unwrap()], def);
+        let bitmap_nbytes = def.bitmap_nbytes();
+        let subject_vs = spaces_to_bitmap(&[self.subject.unwrap()], def);
         let object_vs = match self.object {
-            Some(object) => spaces_to_bitvec(&[object], def),
-            None => BitVec::new(),
+            Some(object) => spaces_to_bitmap(&[object], def),
+            None => vec![0xff; bitmap_nbytes],
         };
 
         EventHandler {
@@ -118,6 +121,7 @@ impl EventHandlerBuilder {
                 primary_tree: self.primary_tree,
                 subject_vs,
                 object_vs,
+                bitmap_nbytes,
             },
             handler,
         }
@@ -151,19 +155,17 @@ impl EventHandler {
         subject: &MedusaClass,
         object: Option<&MedusaClass>,
     ) -> bool {
-        if !self.data.subject_vs.all() {
-            let svs = bitvec_from_vs_exact(subject, self.data.subject_vs.len());
-            // clone to prevent self.subject_vs from being modified by calling and()
-            if self.data.subject_vs.clone().and(&svs) {
+        if !bitmap::all(&self.data.subject_vs) {
+            let svs = &subject.get_vs().expect("subject has no vs")[..self.data.bitmap_nbytes];
+            if bitmap::and(&mut self.data.subject_vs.clone(), svs) != self.data.subject_vs {
                 return false;
             }
         }
 
-        if !self.data.object_vs.all() {
+        if !bitmap::all(&self.data.object_vs) {
             if let Some(object) = object {
-                let ovs = bitvec_from_vs_exact(object, self.data.object_vs.len());
-                // clone to prevent self.object_vs from being modified by calling and()
-                if self.data.object_vs.clone().and(&ovs) {
+                let ovs = &object.get_vs().expect("object has no vs")[..self.data.bitmap_nbytes];
+                if bitmap::and(&mut self.data.object_vs.clone(), ovs) != self.data.object_vs {
                     return false;
                 }
             }
@@ -173,17 +175,8 @@ impl EventHandler {
     }
 }
 
-fn bitvec_from_vs_exact(class: &MedusaClass, len: usize) -> BitVec {
-    let mut bitvec = BitVec::from_bytes(class.get_vs().unwrap());
-    bitvec.truncate(len);
-    bitvec.grow(len, false);
-
-    bitvec
-}
-
 // TODO replace unwraps
 async fn hierarchy_handler(
-    //&self,
     data: &HandlerData,
     ctx: &SharedContext,
     mut auth_data: AuthRequestData,

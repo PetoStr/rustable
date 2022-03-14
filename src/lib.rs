@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+pub mod bitmap;
 pub mod medusa;
 
 pub fn cstr_to_string(name: &[u8]) -> String {

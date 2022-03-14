@@ -1,4 +1,4 @@
-use bit_vec::BitVec;
+use crate::bitmap;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -38,6 +38,10 @@ impl SpaceDef {
         self.id_to_name.clone()
     }
 
+    pub(crate) fn bitmap_nbytes(&self) -> usize {
+        (self.id_cn + 7) / 8
+    }
+
     fn insert_space(&mut self, name: String, id: usize) {
         self.name_to_id.insert(name.clone(), id);
         self.id_to_name.insert(id, name);
@@ -53,10 +57,10 @@ impl SpaceDef {
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct VirtualSpace {
-    member: BitVec,
-    read: BitVec,
-    write: BitVec,
-    see: BitVec,
+    member: Vec<u8>,
+    read: Vec<u8>,
+    write: Vec<u8>,
+    see: Vec<u8>,
 }
 
 impl VirtualSpace {
@@ -65,59 +69,59 @@ impl VirtualSpace {
     }
 
     pub(crate) fn set_member(&mut self, def: &SpaceDef, spaces: &[Space]) {
-        self.member = spaces_to_bitvec(spaces, def);
+        self.member = spaces_to_bitmap(spaces, def);
     }
 
     pub(crate) fn set_read(&mut self, def: &SpaceDef, spaces: &[Space]) {
-        self.read = spaces_to_bitvec(spaces, def);
+        self.read = spaces_to_bitmap(spaces, def);
     }
 
     pub(crate) fn set_write(&mut self, def: &SpaceDef, spaces: &[Space]) {
-        self.write = spaces_to_bitvec(spaces, def);
+        self.write = spaces_to_bitmap(spaces, def);
     }
 
     pub(crate) fn set_see(&mut self, def: &SpaceDef, spaces: &[Space]) {
-        self.see = spaces_to_bitvec(spaces, def);
+        self.see = spaces_to_bitmap(spaces, def);
     }
 
     pub(crate) fn to_member_bytes(&self) -> Vec<u8> {
-        self.member.to_bytes()
+        self.member.clone()
     }
 
     pub(crate) fn to_read_bytes(&self) -> Vec<u8> {
-        self.read.to_bytes()
+        self.read.clone()
     }
 
     pub(crate) fn to_write_bytes(&self) -> Vec<u8> {
-        self.write.to_bytes()
+        self.write.clone()
     }
 
     pub(crate) fn to_see_bytes(&self) -> Vec<u8> {
-        self.see.to_bytes()
+        self.see.clone()
     }
 }
 
-pub(crate) fn spaces_to_bitvec(spaces: &[Space], def: &SpaceDef) -> BitVec {
-    let nbits = def.id_cn;
+pub(crate) fn spaces_to_bitmap(spaces: &[Space], def: &SpaceDef) -> Vec<u8> {
+    let nbytes = def.bitmap_nbytes();
     let ids = &def.name_to_id;
 
-    let mut bitvec = BitVec::from_elem(nbits, false);
+    let mut vec = vec![0; nbytes];
     for space in spaces {
         match space {
             Space::All => {
                 // note that medusa object bitmap will have extra bits zeroed
                 // which are not used nevertheless
-                bitvec.set_all();
+                bitmap::set_all(&mut vec);
             }
             Space::ByName(name) if !name.is_empty() => {
                 let id = ids
                     .get(name)
                     .unwrap_or_else(|| panic!("no such id for space: {}", name));
-                bitvec.set(*id, true);
+                bitmap::set_bit(&mut vec, *id);
             }
             _ => (),
         }
     }
 
-    bitvec
+    vec
 }
