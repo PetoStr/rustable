@@ -25,13 +25,55 @@ async fn getprocess_handler(
         subject.get_attribute::<String>("cmdline").unwrap()
     );
 
-        ctx.enter_tree(&mut auth_data, "domains", "/").await;
-
-        MedusaAnswer::Ok
+    if subject.get_attribute::<String>("cmdline").unwrap() == "./msg_test" {
+        subject.set_attribute::<u32>("med_sact", 0x0).unwrap();
+    } else {
+        subject.set_attribute("med_sact", 0x3fffffff).unwrap();
     }
 
     ctx.update_object(subject).await;
 
+    MedusaAnswer::Ok
+}
+
+async fn getipc_handler(
+    _: &HandlerData,
+    ctx: &SharedContext,
+    mut auth_data: AuthRequestData,
+) -> MedusaAnswer {
+    println!("getipc");
+
+    auth_data
+        .subject
+        .set_attribute("med_oact", 0x3fffffff)
+        .unwrap();
+
+    auth_data.subject.clear_vs().unwrap();
+    auth_data
+        .subject
+        .add_vs(*ctx.config().name_to_space_bit("all_files").unwrap())
+        .unwrap();
+
+    ctx.update_object(&auth_data.subject).await;
+
+    MedusaAnswer::Ok
+}
+
+async fn msgsnd_handler(
+    _: &HandlerData,
+    _ctx: &SharedContext,
+    _auth_data: AuthRequestData,
+) -> MedusaAnswer {
+    println!("ipc_msgsnd");
+    MedusaAnswer::Ok
+}
+
+async fn msgrcv_handler(
+    _: &HandlerData,
+    _ctx: &SharedContext,
+    _auth_data: AuthRequestData,
+) -> MedusaAnswer {
+    println!("ipc_msgrcv");
     MedusaAnswer::Ok
 }
 
@@ -93,6 +135,18 @@ fn create_config() -> Result<Config, ConfigError> {
         .add_event_handler(EventHandler::builder()
             .event("getprocess")
             .with_custom_handler(force_boxed!(getprocess_handler), Space::All, Some(Space::All))
+        )
+        .add_event_handler(EventHandler::builder()
+            .event("getipc")
+            .with_custom_handler(force_boxed!(getipc_handler), Space::All, None)
+        )
+        .add_event_handler(EventHandler::builder()
+            .event("ipc_msgsnd")
+            .with_custom_handler(force_boxed!(msgsnd_handler), Space::ByName("all_domains".to_owned()), Some(Space::ByName("all_files".to_owned())))
+        )
+        .add_event_handler(EventHandler::builder()
+            .event("ipc_msgrcv")
+            .with_custom_handler(force_boxed!(msgrcv_handler), Space::ByName("all_domains".to_owned()), Some(Space::ByName("all_files".to_owned())))
         )
         .build()
 }
