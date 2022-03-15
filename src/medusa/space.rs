@@ -4,14 +4,14 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Space {
     All,
-    ByName(String),
+    ByName(&'static str),
 }
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct SpaceDef {
     id_cn: usize,
-    name_to_id: HashMap<String, usize>,
-    id_to_name: HashMap<usize, String>,
+    name_to_id: HashMap<&'static str, usize>,
+    id_to_name: HashMap<usize, &'static str>,
 }
 
 impl SpaceDef {
@@ -21,7 +21,7 @@ impl SpaceDef {
 
     pub(crate) fn define_space(&mut self, space: Space) {
         if let Space::ByName(name) = space {
-            if self.name_to_id.contains_key(&name) {
+            if self.name_to_id.contains_key(name) {
                 return;
             }
 
@@ -30,20 +30,26 @@ impl SpaceDef {
         }
     }
 
-    pub(crate) fn name_to_id_clone(&self) -> HashMap<String, usize> {
-        self.name_to_id.clone()
+    pub(crate) fn name_to_id_owned(&self) -> HashMap<String, usize> {
+        self.name_to_id
+            .iter()
+            .map(|(k, v)| (k.to_string(), *v))
+            .collect()
     }
 
-    pub(crate) fn id_to_name_clone(&self) -> HashMap<usize, String> {
-        self.id_to_name.clone()
+    pub(crate) fn id_to_name_owned(&self) -> HashMap<usize, String> {
+        self.id_to_name
+            .iter()
+            .map(|(k, v)| (*k, v.to_string()))
+            .collect()
     }
 
     pub(crate) fn bitmap_nbytes(&self) -> usize {
         (self.id_cn + 7) / 8
     }
 
-    fn insert_space(&mut self, name: String, id: usize) {
-        self.name_to_id.insert(name.clone(), id);
+    fn insert_space(&mut self, name: &'static str, id: usize) {
+        self.name_to_id.insert(name, id);
         self.id_to_name.insert(id, name);
     }
 

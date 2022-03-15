@@ -85,8 +85,8 @@ impl ConfigBuilder {
             .map(|(k, v)| (k, v.into_iter().map(|x| x.build(&def)).collect()))
             .collect::<HashMap<String, Box<[EventHandler]>>>();
 
-        let name_to_space_bit = def.name_to_id_clone();
-        let space_bit_to_name = def.id_to_name_clone();
+        let name_to_space_bit = def.name_to_id_owned();
+        let space_bit_to_name = def.id_to_name_owned();
 
         Ok(Config {
             trees,

@@ -74,28 +74,28 @@ impl NodeBuilder {
         Default::default()
     }
 
-    pub fn path(mut self, path: &str) -> Self {
+    pub fn path(mut self, path: &'static str) -> Self {
         self.path = path.to_owned();
         self
     }
 
-    pub fn member_of(mut self, name: &str) -> Self {
-        self.member_of.push(Space::ByName(name.to_owned()));
+    pub fn member_of(mut self, name: &'static str) -> Self {
+        self.member_of.push(Space::ByName(name));
         self
     }
 
-    pub fn reads(mut self, name: &str) -> Self {
-        self.reads.push(Space::ByName(name.to_owned()));
+    pub fn reads(mut self, name: &'static str) -> Self {
+        self.reads.push(Space::ByName(name));
         self
     }
 
-    pub fn writes(mut self, name: &str) -> Self {
-        self.writes.push(Space::ByName(name.to_owned()));
+    pub fn writes(mut self, name: &'static str) -> Self {
+        self.writes.push(Space::ByName(name));
         self
     }
 
-    pub fn sees(mut self, name: &str) -> Self {
-        self.sees.push(Space::ByName(name.to_owned()));
+    pub fn sees(mut self, name: &'static str) -> Self {
+        self.sees.push(Space::ByName(name));
         self
     }
 

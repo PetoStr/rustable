@@ -142,11 +142,11 @@ fn create_config() -> Result<Config, ConfigError> {
         )
         .add_event_handler(EventHandler::builder()
             .event("ipc_msgsnd")
-            .with_custom_handler(force_boxed!(msgsnd_handler), Space::ByName("all_domains".to_owned()), Some(Space::ByName("all_files".to_owned())))
+            .with_custom_handler(force_boxed!(msgsnd_handler), Space::ByName("all_domains"), Some(Space::ByName("all_files")))
         )
         .add_event_handler(EventHandler::builder()
             .event("ipc_msgrcv")
-            .with_custom_handler(force_boxed!(msgrcv_handler), Space::ByName("all_domains".to_owned()), Some(Space::ByName("all_files".to_owned())))
+            .with_custom_handler(force_boxed!(msgrcv_handler), Space::ByName("all_domains"), Some(Space::ByName("all_files")))
         )
         .build()
 }
@@ -154,6 +154,7 @@ fn create_config() -> Result<Config, ConfigError> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = create_config().context("Failed to create config")?;
+    return Ok(());
 
     let write_handle = OpenOptions::new()
         .read(true)
