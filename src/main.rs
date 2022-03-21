@@ -5,8 +5,6 @@ use rustable::medusa::{
     Node, SharedContext, Space, Tree,
 };
 use std::fs::OpenOptions;
-use std::future::Future;
-use std::pin::Pin;
 
 const MEDUSA_FILE_NAME: &str = "/dev/medusa";
 

@@ -31,11 +31,17 @@ pub struct HandlerData {
 macro_rules! force_boxed {
     ($inc:expr) => {{
         fn boxed<'a>(
-            data: &'a HandlerData,
-            ctx: &'a SharedContext,
-            auth_data: AuthRequestData,
-        ) -> Pin<Box<dyn Future<Output = MedusaAnswer> + Send + 'a>> {
-            Box::pin($inc(data, ctx, auth_data))
+            data: &'a $crate::medusa::HandlerData,
+            ctx: &'a $crate::medusa::SharedContext,
+            auth_data: $crate::medusa::AuthRequestData,
+        ) -> ::std::pin::Pin<
+            ::std::boxed::Box<
+                dyn ::std::future::Future<Output = $crate::medusa::MedusaAnswer>
+                    + ::std::marker::Send
+                    + 'a,
+            >,
+        > {
+            ::std::boxed::Box::pin($inc(data, ctx, auth_data))
         }
         boxed
     }};
