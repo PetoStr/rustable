@@ -152,7 +152,6 @@ fn create_config() -> Result<Config, ConfigError> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = create_config().context("Failed to create config")?;
-    return Ok(());
 
     let write_handle = OpenOptions::new()
         .read(true)
