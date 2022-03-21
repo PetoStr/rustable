@@ -1,7 +1,7 @@
 use crate::bitmap;
 use crate::cstr_to_string;
 use crate::medusa::space::{spaces_to_bitmap, Space, SpaceDef};
-use crate::medusa::{AuthRequestData, MedusaAnswer, MedusaClass, Monitoring, SharedContext};
+use crate::medusa::{AuthRequestData, Context, MedusaAnswer, MedusaClass, Monitoring};
 use derivative::Derivative;
 use std::future::Future;
 use std::pin::Pin;
@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 pub type Handler = for<'a> fn(
     &'a HandlerData,
-    &'a SharedContext,
+    &'a Context,
     AuthRequestData,
 ) -> Pin<Box<dyn Future<Output = MedusaAnswer> + Send + 'a>>;
 
@@ -32,7 +32,7 @@ macro_rules! force_boxed {
     ($inc:expr) => {{
         fn boxed<'a>(
             data: &'a $crate::medusa::HandlerData,
-            ctx: &'a $crate::medusa::SharedContext,
+            ctx: &'a $crate::medusa::Context,
             auth_data: $crate::medusa::AuthRequestData,
         ) -> ::std::pin::Pin<
             ::std::boxed::Box<
@@ -148,11 +148,7 @@ impl EventHandler {
         EventHandlerBuilder::new()
     }
 
-    pub(crate) async fn handle(
-        &self,
-        ctx: &SharedContext,
-        auth_data: AuthRequestData,
-    ) -> MedusaAnswer {
+    pub(crate) async fn handle(&self, ctx: &Context, auth_data: AuthRequestData) -> MedusaAnswer {
         (self.handler)(&self.data, ctx, auth_data).await
     }
 
@@ -184,7 +180,7 @@ impl EventHandler {
 // TODO replace unwraps
 async fn hierarchy_handler(
     data: &HandlerData,
-    ctx: &SharedContext,
+    ctx: &Context,
     mut auth_data: AuthRequestData,
 ) -> MedusaAnswer {
     let config = &ctx.config;

@@ -1,8 +1,8 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use rustable::force_boxed;
 use rustable::medusa::{
-    AuthRequestData, Config, ConfigError, Connection, EventHandler, HandlerData, MedusaAnswer,
-    Node, SharedContext, Space, Tree,
+    AuthRequestData, Config, ConfigError, Connection, Context, EventHandler, HandlerData,
+    MedusaAnswer, Node, Space, Tree,
 };
 use std::fs::OpenOptions;
 
@@ -10,7 +10,7 @@ const MEDUSA_FILE_NAME: &str = "/dev/medusa";
 
 async fn getprocess_handler(
     _: &HandlerData,
-    ctx: &SharedContext,
+    ctx: &Context,
     mut auth_data: AuthRequestData,
 ) -> MedusaAnswer {
     println!("sample process handler");
@@ -36,7 +36,7 @@ async fn getprocess_handler(
 
 async fn getipc_handler(
     _: &HandlerData,
-    ctx: &SharedContext,
+    ctx: &Context,
     mut auth_data: AuthRequestData,
 ) -> MedusaAnswer {
     println!("getipc");
@@ -59,7 +59,7 @@ async fn getipc_handler(
 
 async fn msgsnd_handler(
     _: &HandlerData,
-    _ctx: &SharedContext,
+    _ctx: &Context,
     _auth_data: AuthRequestData,
 ) -> MedusaAnswer {
     println!("ipc_msgsnd");
@@ -68,7 +68,7 @@ async fn msgsnd_handler(
 
 async fn msgrcv_handler(
     _: &HandlerData,
-    _ctx: &SharedContext,
+    _ctx: &Context,
     _auth_data: AuthRequestData,
 ) -> MedusaAnswer {
     println!("ipc_msgrcv");
@@ -151,6 +151,7 @@ fn create_config() -> Result<Config, ConfigError> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    use anyhow::Context;
     let config = create_config().context("Failed to create config")?;
 
     let write_handle = OpenOptions::new()

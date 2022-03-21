@@ -10,7 +10,7 @@ pub mod class;
 pub use class::{MedusaClass, MedusaClassHeader};
 
 pub mod context;
-pub use context::SharedContext;
+pub use context::Context;
 
 pub mod event;
 pub use event::{MedusaEvtype, MedusaEvtypeHeader, Monitoring};

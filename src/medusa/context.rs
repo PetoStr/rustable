@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
-pub struct SharedContext {
+pub struct Context {
     pub(crate) classes: DashMap<u64, MedusaClass>,
     pub(crate) evtypes: DashMap<u64, MedusaEvtype>,
 
@@ -25,7 +25,7 @@ pub struct SharedContext {
     request_id_cn: AtomicU64,
 }
 
-impl SharedContext {
+impl Context {
     pub(crate) fn new(writer: Writer, config: Config) -> Self {
         Self {
             classes: DashMap::new(),

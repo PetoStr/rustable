@@ -1,7 +1,7 @@
 use crate::medusa::constants::*;
 use crate::medusa::{
-    AsyncReader, AuthRequestData, Command, CommunicationError, Config, ConnectionError,
-    DecisionAnswer, MedusaAnswer, NativeByteOrderReader, SharedContext, Writer,
+    AsyncReader, AuthRequestData, Command, CommunicationError, Config, ConnectionError, Context,
+    DecisionAnswer, MedusaAnswer, NativeByteOrderReader, Writer,
 };
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -26,7 +26,7 @@ lazy_static! {
 pub struct Connection<R: Read + Unpin> {
     // TODO endian based reader
     reader: NativeByteOrderReader<R>,
-    context: Arc<SharedContext>,
+    context: Arc<Context>,
 }
 
 impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
@@ -42,7 +42,7 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
 
         let writer = Writer::new(write_handle);
 
-        let context = Arc::new(SharedContext::new(writer, config));
+        let context = Arc::new(Context::new(writer, config));
 
         let greeting = reader.read_u64().await?;
         println!("greeting = 0x{:016x}", greeting);
@@ -243,7 +243,7 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
     }
 }
 
-async fn get_answer(ctx: Arc<SharedContext>, auth_data: AuthRequestData) -> MedusaAnswer {
+async fn get_answer(ctx: Arc<Context>, auth_data: AuthRequestData) -> MedusaAnswer {
     let event = auth_data.evtype.name();
     let event_handlers = ctx.config.handlers_by_event(event);
 
