@@ -1,11 +1,15 @@
+//! Rustable is an implementation of authorization server for
+//! [Medusa](https://github.com/Medusa-Team/linux-medusa) security module.
+
 #[macro_use]
 extern crate lazy_static;
 
 pub mod bitmap;
 pub mod medusa;
 
-pub fn cstr_to_string(name: &[u8]) -> String {
-    let vec = name
+/// Converts null terminated bytes to [`std::string::String`].
+pub fn cstr_to_string(cstr: &[u8]) -> String {
+    let vec = cstr
         .iter()
         .copied()
         .take_while(|&b| b != 0)

@@ -1,3 +1,5 @@
+//! Everything related to Medusa communication protocol.
+
 pub mod attribute;
 pub use attribute::{AttributeBytes, MedusaAttribute, MedusaAttributeHeader, MedusaAttributes};
 
