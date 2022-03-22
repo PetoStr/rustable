@@ -69,6 +69,25 @@ impl ConfigBuilder {
         self
     }
 
+    pub fn add_hierarchy_event_handler(
+        mut self,
+        event: &'static str,
+        primary_tree: &str,
+        attribute: Option<&str>,
+        from_object: bool,
+    ) -> Self {
+        let event_handler = EventHandlerBuilder::new()
+            .event(event)
+            .with_hierarchy_handler(primary_tree, attribute, from_object);
+
+        let event = event_handler.event.to_string();
+        self.event_handlers
+            .entry(event)
+            .or_default()
+            .push(event_handler);
+        self
+    }
+
     pub fn add_custom_event_handler(mut self, custom_handler: impl CustomHandler) -> Self {
         let event_handler = EventHandlerBuilder::new().with_custom_handler(custom_handler);
 

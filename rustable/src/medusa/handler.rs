@@ -85,9 +85,9 @@ impl EventHandlerBuilder {
 
     pub fn with_hierarchy_handler(
         mut self,
+        primary_tree: &str,
         attribute: Option<&str>,
         from_object: bool,
-        primary_tree: &str,
     ) -> Self {
         if self.handler.is_some() {
             panic!("handler already set");
