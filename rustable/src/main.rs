@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rustable::medusa::{
     AuthRequestData, Config, ConfigError, Connection, Context, HandlerData, MedusaAnswer, Node,
-    Tree,
+    SpaceBuilder, Tree,
 };
 use rustable_codegen::handler;
 use std::fs::OpenOptions;
@@ -81,55 +81,62 @@ async fn msgrcv_handler(
 
 #[rustfmt::skip]
 fn create_config() -> Result<Config, ConfigError> {
-    // TODO simplify by making a macro?
+    // TODO regex `.*` (recursive) should have the lowest priority, currently it is random
+
+    let all_files = SpaceBuilder::new()
+        .with_name("all_files")
+        .with_path_recursive("fs/")
+        .exclude_path_recursive("fs/home/roderik")
+        .exclude_space("one");
+
+    let all_domains = SpaceBuilder::new()
+        .with_name("all_files")
+        .with_path_recursive("domains/")
+        .reads(vec!["all_files", "all_domains", "home"])
+        .writes(vec!["all_files", "all_domains", "home"])
+        .sees(vec!["all_files", "all_domains", "home"]);
+
+    let home = SpaceBuilder::new()
+        .with_name("home")
+        .with_path_recursive("fs/home/roderik")
+        .exclude_path_recursive("fs/home/roderik/1");
+
+    let special = SpaceBuilder::new()
+        .with_name("special")
+        .with_path_recursive("fs/home/roderik/1");
+
+    let one = SpaceBuilder::new()
+        .with_name("one")
+        .with_path_recursive("fs/1/home");
+
     Config::builder()
+        // the first way to define tree
         .add_tree(Tree::builder()
-            .name("fs")
+            .with_name("fs")
             .set_root(Node::builder()
-                .path("/")
-                .member_of("all_files")
+                .with_path("/")
                 .add_node(Node::builder()
-                    .path(r"home")
-                    .member_of("home")
+                    .with_path(r"root")
+                    .member_of("sample")
                     .add_node(Node::builder()
-                        .path(r"roderik")
-                        .member_of("home")
-                        .add_node(Node::builder()
-                            .path(r"1")
-                        )
-                        .add_node(Node::builder()
-                            .path(r".*")
-                            .member_of("home")
-                        )
+                        .with_path(r"1")
+                    )
+                    .member_of("sample")
+                    .add_node(Node::builder()
+                        .member_of("sample")
+                        .with_path(r".*")
                     )
                 )
-                .add_node(Node::builder()
-                    .path(r"tmp")
-                    .member_of("all_files")
-                    .member_of("tmp")
-                )
-                .add_node(Node::builder()
-                    .path(r".*")
-                    .member_of("all_files")
-                )
             )
         )
-        .add_tree(Tree::builder()
-            .name("domains")
-            .set_root(Node::builder()
-                .path("/")
-                .add_node(Node::builder()
-                    .path(r".*")
-                    .member_of("all_domains")
-                    .reads("all_domains")
-                    .reads("all_files")
-                    .writes("all_domains")
-                    .writes("all_files")
-                    .sees("all_domains")
-                    .sees("all_files")
-                )
-            )
-        )
+
+        // the second way
+        .add_space(all_files)
+        .add_space(all_domains)
+        .add_space(home)
+        .add_space(special)
+        .add_space(one)
+
         .add_hierarchy_event_handler("getfile", "fs", Some("filename"), true)
         .add_custom_event_handler(getprocess_handler)
         .add_custom_event_handler(getipc_handler)

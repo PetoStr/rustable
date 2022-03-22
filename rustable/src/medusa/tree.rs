@@ -3,7 +3,7 @@
 use crate::medusa::space::{Space, SpaceDef, VirtualSpace};
 use crate::medusa::ConfigError;
 use regex::Regex;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -39,7 +39,7 @@ impl Node {
 
 #[derive(Debug)]
 pub struct Tree {
-    name: String,
+    name: &'static str,
     root: Arc<Node>,
 }
 
@@ -49,7 +49,7 @@ impl Tree {
     }
 
     pub fn name(&self) -> &str {
-        self.name.as_str()
+        self.name
     }
 
     pub(crate) fn root(&self) -> &Arc<Node> {
@@ -59,14 +59,15 @@ impl Tree {
 
 #[derive(Debug, Default)]
 pub struct NodeBuilder {
-    path: String,
+    path: &'static str,
+    regex_path: &'static str,
 
-    member_of: Vec<Space>,
-    reads: Vec<Space>,
-    writes: Vec<Space>,
-    sees: Vec<Space>,
+    member_of: HashSet<&'static str>,
+    reads: HashSet<&'static str>,
+    writes: HashSet<&'static str>,
+    sees: HashSet<&'static str>,
 
-    children: Vec<NodeBuilder>,
+    children: HashMap<String, NodeBuilder>,
 }
 
 impl NodeBuilder {
@@ -74,52 +75,63 @@ impl NodeBuilder {
         Default::default()
     }
 
-    pub fn path(mut self, path: &'static str) -> Self {
-        self.path = path.to_owned();
+    pub fn path(&self) -> &'static str {
+        self.path
+    }
+
+    pub fn with_path(mut self, path: &'static str) -> Self {
+        self.path = path;
         self
     }
 
     pub fn member_of(mut self, name: &'static str) -> Self {
-        self.member_of.push(Space::ByName(name));
+        self.member_of.insert(name);
         self
     }
 
     pub fn reads(mut self, name: &'static str) -> Self {
-        self.reads.push(Space::ByName(name));
+        self.reads.insert(name);
         self
     }
 
     pub fn writes(mut self, name: &'static str) -> Self {
-        self.writes.push(Space::ByName(name));
+        self.writes.insert(name);
         self
     }
 
     pub fn sees(mut self, name: &'static str) -> Self {
-        self.sees.push(Space::ByName(name));
+        self.sees.insert(name);
         self
     }
 
     pub fn add_node(mut self, node: NodeBuilder) -> Self {
-        self.children.push(node);
+        let path = node.path().to_owned();
+        self.children.insert(path, node);
         self
     }
 
-    // these functions below create a new node in constable
-    /*pub fn include_path(mut self, path: &str) -> Self {
-        self
+    pub fn get_or_create_child(&mut self, path: &'static str) -> &mut NodeBuilder {
+        self.children
+            .entry(path.to_owned())
+            .or_insert_with(|| NodeBuilder::new().with_path(path))
     }
 
-    pub fn exclude_path(mut self, path: &str) -> Self {
-        self
+    pub(crate) fn set_access<I>(&mut self, reads: I, writes: I, sees: I)
+    where
+        I: Iterator<Item = &'static str>,
+    {
+        self.reads.extend(reads);
+        self.writes.extend(writes);
+        self.sees.extend(sees);
     }
 
-    pub fn include_space(mut self, path: &str) -> Self {
-        self
+    pub(crate) fn member_of_include_or_exclude(&mut self, name: &'static str, include: bool) {
+        if include {
+            self.member_of.insert(name);
+        } else {
+            self.member_of.remove(name);
+        }
     }
-
-    pub fn exclude_space(mut self, path: &str) -> Self {
-        self
-    }*/
 
     fn build(
         self,
@@ -129,30 +141,29 @@ impl NodeBuilder {
         let children = self
             .children
             .into_iter()
-            .map(|x| x.build(def, cinfo))
+            .map(|(_, x)| x.build(def, cinfo))
             .collect::<Result<_, _>>()?;
 
-        let path_regex = Regex::new(&self.path)?;
+        let path_regex = Regex::new(self.path)?;
 
         // define new spaces which may not exist yet
         self.member_of
             .iter()
-            .for_each(|space| def.define_space(space.clone()));
-        self.reads
-            .iter()
-            .for_each(|space| def.define_space(space.clone()));
-        self.writes
-            .iter()
-            .for_each(|space| def.define_space(space.clone()));
-        self.sees
-            .iter()
-            .for_each(|space| def.define_space(space.clone()));
+            .for_each(|space| def.define_space(space));
+        self.reads.iter().for_each(|space| def.define_space(space));
+        self.writes.iter().for_each(|space| def.define_space(space));
+        self.sees.iter().for_each(|space| def.define_space(space));
+
+        let member_of: Vec<Space> = self.member_of.iter().map(|x| Space::ByName(x)).collect();
+        let reads: Vec<Space> = self.member_of.iter().map(|x| Space::ByName(x)).collect();
+        let writes: Vec<Space> = self.member_of.iter().map(|x| Space::ByName(x)).collect();
+        let sees: Vec<Space> = self.member_of.iter().map(|x| Space::ByName(x)).collect();
 
         let mut vs = VirtualSpace::new();
-        vs.set_member(def, &self.member_of);
-        vs.set_read(def, &self.reads);
-        vs.set_write(def, &self.writes);
-        vs.set_see(def, &self.sees);
+        vs.set_member(def, &member_of);
+        vs.set_read(def, &reads);
+        vs.set_write(def, &writes);
+        vs.set_see(def, &sees);
 
         let node = Arc::new(Node {
             path_regex,
@@ -168,8 +179,8 @@ impl NodeBuilder {
 
 #[derive(Default)]
 pub struct TreeBuilder {
-    name: String,
-    root: NodeBuilder,
+    name: &'static str,
+    root: Option<NodeBuilder>,
 }
 
 impl TreeBuilder {
@@ -177,14 +188,23 @@ impl TreeBuilder {
         Default::default()
     }
 
-    pub fn name(mut self, name: &str) -> Self {
-        self.name = name.to_owned();
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    pub fn with_name(mut self, name: &'static str) -> Self {
+        self.name = name;
         self
     }
 
     pub fn set_root(mut self, root: NodeBuilder) -> Self {
-        self.root = root;
+        self.root = Some(root);
         self
+    }
+
+    pub(crate) fn get_or_create_root(&mut self, path: &'static str) -> &mut NodeBuilder {
+        self.root
+            .get_or_insert_with(|| NodeBuilder::new().with_path(path))
     }
 
     pub(crate) fn build(
@@ -194,7 +214,7 @@ impl TreeBuilder {
     ) -> Result<Tree, ConfigError> {
         Ok(Tree {
             name: self.name,
-            root: self.root.build(def, cinfo)?,
+            root: self.root.expect("Root is missing.").build(def, cinfo)?,
         })
     }
 }

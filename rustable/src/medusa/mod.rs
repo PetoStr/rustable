@@ -38,7 +38,7 @@ pub use request::{
 };
 
 mod space;
-pub use space::Space;
+pub use space::{Space, SpaceBuilder};
 
 pub mod tree;
 pub use tree::{Node, NodeBuilder, Tree, TreeBuilder};

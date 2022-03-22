@@ -1,6 +1,100 @@
 use crate::bitmap;
 use std::collections::HashMap;
 
+#[derive(Debug, Default, Clone)]
+pub struct SpaceBuilder {
+    pub(crate) name: Option<&'static str>,
+    pub(crate) path: Option<(&'static str, bool)>,
+
+    pub(crate) reads: Vec<&'static str>,
+    pub(crate) writes: Vec<&'static str>,
+    pub(crate) sees: Vec<&'static str>,
+
+    pub(crate) include_space: Vec<&'static str>,
+    pub(crate) exclude_space: Vec<&'static str>,
+
+    pub(crate) include_path: Vec<(&'static str, bool)>,
+    pub(crate) exclude_path: Vec<(&'static str, bool)>,
+}
+
+impl SpaceBuilder {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.name.as_ref().expect("Space does not have a name.")
+    }
+
+    pub fn path(&self) -> &'static str {
+        self.path.as_ref().expect("Space does not have a path.").0
+    }
+
+    pub fn recursive(&self) -> bool {
+        self.path.as_ref().expect("Space does not have a path.").1
+    }
+
+    pub fn with_name(mut self, name: &'static str) -> Self {
+        self.name = Some(name);
+        self
+    }
+
+    pub fn with_path(mut self, path: &'static str) -> Self {
+        self.path = Some((path, false));
+        self
+    }
+
+    pub fn with_path_recursive(mut self, path: &'static str) -> Self {
+        self.path = Some((path, true));
+        self
+    }
+
+    pub fn reads(mut self, names: Vec<&'static str>) -> Self {
+        self.reads.extend(names);
+        self
+    }
+
+    pub fn writes(mut self, names: Vec<&'static str>) -> Self {
+        self.writes.extend(names);
+        self
+    }
+
+    pub fn sees(mut self, names: Vec<&'static str>) -> Self {
+        self.sees.extend(names);
+        self
+    }
+
+    pub fn include_space(mut self, path: &'static str) -> Self {
+        self.include_space.push(path);
+        self
+    }
+
+    pub fn exclude_space(mut self, path: &'static str) -> Self {
+        self.exclude_space.push(path);
+        self
+    }
+
+    pub fn include_path(mut self, path: &'static str) -> Self {
+        self.include_path.push((path, false));
+        self
+    }
+
+    pub fn include_path_recursive(mut self, path: &'static str) -> Self {
+        self.include_path.push((path, true));
+        self
+    }
+
+    pub fn exclude_path(mut self, path: &'static str) -> Self {
+        self.exclude_path.push((path, false));
+        self
+    }
+
+    pub fn exclude_path_recursive(mut self, path: &'static str) -> Self {
+        self.exclude_path.push((path, true));
+        self
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Space {
     All,
@@ -19,15 +113,13 @@ impl SpaceDef {
         Default::default()
     }
 
-    pub(crate) fn define_space(&mut self, space: Space) {
-        if let Space::ByName(name) = space {
-            if self.name_to_id.contains_key(name) {
-                return;
-            }
-
-            let id = self.new_id();
-            self.insert_space(name, id);
+    pub(crate) fn define_space(&mut self, name: &'static str) {
+        if self.name_to_id.contains_key(name) {
+            return;
         }
+
+        let id = self.new_id();
+        self.insert_space(name, id);
     }
 
     pub(crate) fn name_to_id_owned(&self) -> HashMap<String, usize> {
