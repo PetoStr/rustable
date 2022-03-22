@@ -59,7 +59,7 @@ async fn getipc_handler(
     MedusaAnswer::Ok
 }
 
-#[handler(subject = "all_domains", event = "getipc", object = "all_files")]
+#[handler(subject = "all_domains", event = "ipc_msgsnd", object = "all_files")]
 async fn msgsnd_handler(
     _: &HandlerData,
     _ctx: &Context,
@@ -69,7 +69,7 @@ async fn msgsnd_handler(
     MedusaAnswer::Ok
 }
 
-#[handler(subject = "all_domains", event = "getipc", object = "all_files")]
+#[handler(subject = "all_domains", event = "ipc_msgrcv", object = "all_files")]
 async fn msgrcv_handler(
     _: &HandlerData,
     _ctx: &Context,
