@@ -1,13 +1,14 @@
 use anyhow::Result;
-use rustable::force_boxed;
 use rustable::medusa::{
     AuthRequestData, Config, ConfigError, Connection, Context, EventHandler, HandlerData,
-    MedusaAnswer, Node, Space, Tree,
+    MedusaAnswer, Node, Tree,
 };
+use rustable_codegen::handler;
 use std::fs::OpenOptions;
 
 const MEDUSA_FILE_NAME: &str = "/dev/medusa";
 
+#[handler(subject = "*", event = "getprocess", object = "*")]
 async fn getprocess_handler(
     _: &HandlerData,
     ctx: &Context,
@@ -34,6 +35,7 @@ async fn getprocess_handler(
     MedusaAnswer::Ok
 }
 
+#[handler(subject = "*", event = "getipc")]
 async fn getipc_handler(
     _: &HandlerData,
     ctx: &Context,
@@ -57,6 +59,7 @@ async fn getipc_handler(
     MedusaAnswer::Ok
 }
 
+#[handler(subject = "all_domains", event = "getipc", object = "all_files")]
 async fn msgsnd_handler(
     _: &HandlerData,
     _ctx: &Context,
@@ -66,6 +69,7 @@ async fn msgsnd_handler(
     MedusaAnswer::Ok
 }
 
+#[handler(subject = "all_domains", event = "getipc", object = "all_files")]
 async fn msgrcv_handler(
     _: &HandlerData,
     _ctx: &Context,
@@ -130,22 +134,10 @@ fn create_config() -> Result<Config, ConfigError> {
             .event("getfile")
             .with_hierarchy_handler(Some("filename"), true, "fs")
         )
-        .add_event_handler(EventHandler::builder()
-            .event("getprocess")
-            .with_custom_handler(force_boxed!(getprocess_handler), Space::All, Some(Space::All))
-        )
-        .add_event_handler(EventHandler::builder()
-            .event("getipc")
-            .with_custom_handler(force_boxed!(getipc_handler), Space::All, None)
-        )
-        .add_event_handler(EventHandler::builder()
-            .event("ipc_msgsnd")
-            .with_custom_handler(force_boxed!(msgsnd_handler), Space::ByName("all_domains"), Some(Space::ByName("all_files")))
-        )
-        .add_event_handler(EventHandler::builder()
-            .event("ipc_msgrcv")
-            .with_custom_handler(force_boxed!(msgrcv_handler), Space::ByName("all_domains"), Some(Space::ByName("all_files")))
-        )
+        .add_custom_event_handler(getprocess_handler)
+        .add_custom_event_handler(getipc_handler)
+        .add_custom_event_handler(msgsnd_handler)
+        .add_custom_event_handler(msgrcv_handler)
         .build()
 }
 

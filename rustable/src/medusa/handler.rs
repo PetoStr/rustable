@@ -47,10 +47,21 @@ macro_rules! force_boxed {
     }};
 }
 
+pub struct CustomHandlerDef {
+    pub event: &'static str,
+    pub handler: Handler,
+    pub subject: Space,
+    pub object: Option<Space>,
+}
+
+pub trait CustomHandler {
+    fn define(self) -> CustomHandlerDef;
+}
+
 #[derive(Derivative)]
 #[derivative(Debug, Default)]
 pub struct EventHandlerBuilder {
-    pub(crate) event: String,
+    pub(crate) event: &'static str,
     attribute: Option<String>,
     from_object: bool,
     primary_tree: String,
@@ -67,8 +78,8 @@ impl EventHandlerBuilder {
         Default::default()
     }
 
-    pub fn event(mut self, event: &str) -> Self {
-        self.event = event.to_owned();
+    pub fn event(mut self, event: &'static str) -> Self {
+        self.event = event;
         self
     }
 
@@ -91,16 +102,19 @@ impl EventHandlerBuilder {
         self
     }
 
-    pub fn with_custom_handler(
-        mut self,
-        handler: Handler,
-        subject: Space,
-        object: Option<Space>,
-    ) -> Self {
+    pub fn with_custom_handler(mut self, custom_handler: impl CustomHandler) -> Self {
         if self.handler.is_some() {
             panic!("handler already set");
         }
 
+        let CustomHandlerDef {
+            event,
+            handler,
+            subject,
+            object,
+        } = custom_handler.define();
+
+        self.event = event;
         self.subject = Some(subject);
         self.object = object;
         self.handler = Some(handler);
@@ -121,7 +135,7 @@ impl EventHandlerBuilder {
 
         EventHandler {
             data: HandlerData {
-                event: self.event,
+                event: self.event.to_string(),
                 attribute: self.attribute,
                 from_object: self.from_object,
                 primary_tree: self.primary_tree,

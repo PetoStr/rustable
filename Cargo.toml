@@ -1,21 +1,6 @@
-[package]
-name = "rustable"
-version = "0.1.0"
-authors = ["root"]
-edition = "2021"
+[workspace]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-anyhow = { version = "1.0.52", features = ["backtrace"] }
-async-trait = "0.1.52"
-bitflags = "1.3.2"
-dashmap = "5.0.0"
-derivative = "2.2.0"
-hashlink = "0.7.0"
-lazy_static = "1.4.0"
-nom = "7.1.0"
-polling = "2.2.0"
-regex = "1.5.4"
-thiserror = "1.0.30"
-tokio = { version = "1", features = ["full"] }
+members = [
+	"rustable",
+	"rustable-codegen",
+]

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::medusa::error::ConfigError;
-use crate::medusa::handler::{EventHandler, EventHandlerBuilder};
+use crate::medusa::handler::{CustomHandler, EventHandler, EventHandlerBuilder};
 use crate::medusa::space::SpaceDef;
 use crate::medusa::tree::{Node, Tree, TreeBuilder};
 use std::collections::HashMap;
@@ -61,7 +61,18 @@ impl ConfigBuilder {
     }
 
     pub fn add_event_handler(mut self, event_handler: EventHandlerBuilder) -> Self {
-        let event = event_handler.event.clone();
+        let event = event_handler.event.to_string();
+        self.event_handlers
+            .entry(event)
+            .or_default()
+            .push(event_handler);
+        self
+    }
+
+    pub fn add_custom_event_handler(mut self, custom_handler: impl CustomHandler) -> Self {
+        let event_handler = EventHandlerBuilder::new().with_custom_handler(custom_handler);
+
+        let event = event_handler.event.to_string();
         self.event_handlers
             .entry(event)
             .or_default()
