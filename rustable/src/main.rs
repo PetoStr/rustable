@@ -7,7 +7,7 @@ use std::fs::OpenOptions;
 
 const MEDUSA_FILE_NAME: &str = "/dev/medusa";
 
-#[handler(subject = "*", event = "getprocess", object = "*")]
+#[handler(subject_vs = "*", event = "getprocess", object_vs = "*")]
 async fn getprocess_handler(ctx: &Context, args: HandlerArgs<'_>) -> MedusaAnswer {
     println!("sample process handler");
 
@@ -32,7 +32,7 @@ async fn getprocess_handler(ctx: &Context, args: HandlerArgs<'_>) -> MedusaAnswe
     MedusaAnswer::Ok
 }
 
-#[handler(subject = "*", event = "getipc")]
+#[handler(subject_vs = "*", event = "getipc")]
 async fn getipc_handler(ctx: &Context, args: HandlerArgs<'_>) -> MedusaAnswer {
     println!("getipc");
 
@@ -50,13 +50,13 @@ async fn getipc_handler(ctx: &Context, args: HandlerArgs<'_>) -> MedusaAnswer {
     MedusaAnswer::Ok
 }
 
-#[handler(subject = "all_domains", event = "ipc_msgsnd", object = "all_files")]
+#[handler(subject_vs = "all_domains", event = "ipc_msgsnd", object_vs = "all_files")]
 async fn msgsnd_handler(_ctx: &Context, _args: HandlerArgs<'_>) -> MedusaAnswer {
     println!("ipc_msgsnd");
     MedusaAnswer::Ok
 }
 
-#[handler(subject = "all_domains", event = "ipc_msgrcv", object = "all_files")]
+#[handler(subject_vs = "all_domains", event = "ipc_msgrcv", object_vs = "all_files")]
 async fn msgrcv_handler(_ctx: &Context, _args: HandlerArgs<'_>) -> MedusaAnswer {
     println!("ipc_msgrcv");
     MedusaAnswer::Ok

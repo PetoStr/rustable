@@ -27,7 +27,7 @@ impl Args {
                                 ))
                             }
                         }
-                    } else if nv.path.is_ident("subject") {
+                    } else if nv.path.is_ident("subject_vs") {
                         match nv.lit {
                             syn::Lit::Str(val) => subject = Some(val),
                             _ => {
@@ -37,7 +37,7 @@ impl Args {
                                 ))
                             }
                         }
-                    } else if nv.path.is_ident("object") {
+                    } else if nv.path.is_ident("object_vs") {
                         match nv.lit {
                             syn::Lit::Str(val) => object = Some(val),
                             _ => {
