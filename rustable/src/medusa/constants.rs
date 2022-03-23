@@ -42,6 +42,9 @@ pub const MEDUSA_EVTYPE_TRIGGEREDBYOBJECTBIT: u16 = 0x4000;
 pub const MEDUSA_ACCTYPE_TRIGGEREDATOBJECT: u16 =
     MEDUSA_EVTYPE_TRIGGEREDATOBJECT | MEDUSA_EVTYPE_TRIGGEREDBYOBJECTBIT;
 
+pub const NODE_HIGHEST_PRIORITY: u16 = std::u16::MIN;
+pub const NODE_LOWEST_PRIORITY: u16 = std::u16::MAX;
+
 bitflags! {
     #[derive(Default)]
     pub struct AttributeMods: u8 {

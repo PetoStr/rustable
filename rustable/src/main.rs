@@ -81,8 +81,6 @@ async fn msgrcv_handler(
 
 #[rustfmt::skip]
 fn create_config() -> Result<Config, ConfigError> {
-    // TODO regex `.*` (recursive) should have the lowest priority, currently it is random
-
     let all_files = SpaceBuilder::new()
         .with_name("all_files")
         .with_path_recursive("fs/")
@@ -121,8 +119,7 @@ fn create_config() -> Result<Config, ConfigError> {
                     .add_node(Node::builder()
                         .with_path(r"1")
                     )
-                    .member_of("sample")
-                    .add_node(Node::builder()
+                    .add_node_with_priority(1000, Node::builder()
                         .member_of("sample")
                         .with_path(r".*")
                     )

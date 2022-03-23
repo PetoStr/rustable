@@ -1,9 +1,10 @@
 #![allow(dead_code)]
 
+use crate::medusa::constants::NODE_HIGHEST_PRIORITY;
 use crate::medusa::space::{Space, SpaceDef, VirtualSpace};
 use crate::medusa::ConfigError;
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -67,7 +68,7 @@ pub struct NodeBuilder {
     writes: HashSet<&'static str>,
     sees: HashSet<&'static str>,
 
-    children: HashMap<String, NodeBuilder>,
+    children: BTreeMap<u16, HashMap<String, NodeBuilder>>,
 }
 
 impl NodeBuilder {
@@ -106,12 +107,30 @@ impl NodeBuilder {
 
     pub fn add_node(mut self, node: NodeBuilder) -> Self {
         let path = node.path().to_owned();
-        self.children.insert(path, node);
+        self.children
+            .entry(NODE_HIGHEST_PRIORITY)
+            .or_default()
+            .insert(path, node);
         self
     }
 
-    pub fn get_or_create_child(&mut self, path: &'static str) -> &mut NodeBuilder {
+    pub fn add_node_with_priority(mut self, priority: u16, node: NodeBuilder) -> Self {
+        let path = node.path().to_owned();
         self.children
+            .entry(priority)
+            .or_default()
+            .insert(path, node);
+        self
+    }
+
+    pub(crate) fn get_or_create_child(
+        &mut self,
+        priority: u16,
+        path: &'static str,
+    ) -> &mut NodeBuilder {
+        self.children
+            .entry(priority)
+            .or_default()
             .entry(path.to_owned())
             .or_insert_with(|| NodeBuilder::new().with_path(path))
     }
@@ -141,6 +160,8 @@ impl NodeBuilder {
         let children = self
             .children
             .into_iter()
+            .map(|(_, hmap)| hmap)
+            .flatten()
             .map(|(_, x)| x.build(def, cinfo))
             .collect::<Result<_, _>>()?;
 
