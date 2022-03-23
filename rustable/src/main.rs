@@ -88,7 +88,7 @@ fn create_config() -> Result<Config, ConfigError> {
         .exclude_space("one");
 
     let all_domains = SpaceBuilder::new()
-        .with_name("all_files")
+        .with_name("all_domains")
         .with_path_recursive("domains/")
         .reads(vec!["all_files", "all_domains", "home"])
         .writes(vec!["all_files", "all_domains", "home"])

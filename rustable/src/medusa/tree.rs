@@ -176,9 +176,9 @@ impl NodeBuilder {
         self.sees.iter().for_each(|space| def.define_space(space));
 
         let member_of: Vec<Space> = self.member_of.iter().map(|x| Space::ByName(x)).collect();
-        let reads: Vec<Space> = self.member_of.iter().map(|x| Space::ByName(x)).collect();
-        let writes: Vec<Space> = self.member_of.iter().map(|x| Space::ByName(x)).collect();
-        let sees: Vec<Space> = self.member_of.iter().map(|x| Space::ByName(x)).collect();
+        let reads: Vec<Space> = self.reads.iter().map(|x| Space::ByName(x)).collect();
+        let writes: Vec<Space> = self.writes.iter().map(|x| Space::ByName(x)).collect();
+        let sees: Vec<Space> = self.sees.iter().map(|x| Space::ByName(x)).collect();
 
         let mut vs = VirtualSpace::new();
         vs.set_member(def, &member_of);
