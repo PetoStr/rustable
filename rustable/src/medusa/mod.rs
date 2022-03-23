@@ -21,7 +21,9 @@ pub mod error;
 pub use error::{AttributeError, CommunicationError, ConfigError, ConnectionError, ReaderError};
 
 pub mod handler;
-pub use handler::{CustomHandler, EventHandler, EventHandlerBuilder, Handler, HandlerData};
+pub use handler::{
+    CustomHandler, EventHandler, EventHandlerBuilder, Handler, HandlerArgs, HandlerData,
+};
 
 pub mod mcp;
 pub use mcp::Connection;

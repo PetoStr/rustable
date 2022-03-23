@@ -1,16 +1,25 @@
 use crate::bitmap;
 use crate::cstr_to_string;
 use crate::medusa::space::{spaces_to_bitmap, Space, SpaceDef};
-use crate::medusa::{AuthRequestData, Context, MedusaAnswer, MedusaClass, Monitoring};
+use crate::medusa::{
+    AuthRequestData, Context, MedusaAnswer, MedusaClass, MedusaEvtype, Monitoring,
+};
 use derivative::Derivative;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+pub struct HandlerArgs<'a> {
+    pub evtype: MedusaEvtype,
+    pub subject: MedusaClass,
+    pub object: Option<MedusaClass>,
+
+    pub handler_data: &'a HandlerData,
+}
+
 pub type Handler = for<'a> fn(
-    &'a HandlerData,
-    &'a Context,
-    AuthRequestData,
+    ctx: &'a Context,
+    args: HandlerArgs<'a>,
 ) -> Pin<Box<dyn Future<Output = MedusaAnswer> + Send + 'a>>;
 
 #[derive(Debug, Clone)]
@@ -31,9 +40,8 @@ pub struct HandlerData {
 macro_rules! force_boxed {
     ($inc:expr) => {{
         fn boxed<'a>(
-            data: &'a $crate::medusa::HandlerData,
             ctx: &'a $crate::medusa::Context,
-            auth_data: $crate::medusa::AuthRequestData,
+            args: $crate::medusa::HandlerArgs<'a>,
         ) -> ::std::pin::Pin<
             ::std::boxed::Box<
                 dyn ::std::future::Future<Output = $crate::medusa::MedusaAnswer>
@@ -41,7 +49,7 @@ macro_rules! force_boxed {
                     + 'a,
             >,
         > {
-            ::std::boxed::Box::pin($inc(data, ctx, auth_data))
+            ::std::boxed::Box::pin($inc(ctx, args))
         }
         boxed
     }};
@@ -163,7 +171,13 @@ impl EventHandler {
     }
 
     pub(crate) async fn handle(&self, ctx: &Context, auth_data: AuthRequestData) -> MedusaAnswer {
-        (self.handler)(&self.data, ctx, auth_data).await
+        let args = HandlerArgs {
+            evtype: auth_data.evtype,
+            subject: auth_data.subject,
+            object: auth_data.object,
+            handler_data: &self.data,
+        };
+        (self.handler)(ctx, args).await
     }
 
     pub(crate) fn is_applicable(
@@ -192,35 +206,31 @@ impl EventHandler {
 }
 
 // TODO replace unwraps
-async fn hierarchy_handler(
-    data: &HandlerData,
-    ctx: &Context,
-    mut auth_data: AuthRequestData,
-) -> MedusaAnswer {
-    let config = &ctx.config;
+async fn hierarchy_handler(ctx: &Context, mut args: HandlerArgs<'_>) -> MedusaAnswer {
+    let config = ctx.config();
 
     let tree = config
-        .tree_by_name(&data.primary_tree)
-        .unwrap_or_else(|| panic!("primary tree `{}` not found", data.primary_tree));
+        .tree_by_name(&args.handler_data.primary_tree)
+        .unwrap_or_else(|| {
+            panic!(
+                "primary tree `{}` not found",
+                args.handler_data.primary_tree
+            )
+        });
 
-    let mut cinfo = auth_data.subject.get_object_cinfo().unwrap();
+    let mut cinfo = args.subject.get_object_cinfo().unwrap();
     let mut node;
 
-    let path_attr = data.attribute.as_deref().unwrap_or("");
-    let path = cstr_to_string(auth_data.evtype.get_attribute(path_attr).unwrap_or(b"\0"));
+    let path_attr = args.handler_data.attribute.as_deref().unwrap_or("");
+    let path = cstr_to_string(args.evtype.get_attribute(path_attr).unwrap_or(b"\0"));
 
     if cinfo == 0 {
-        if data.from_object
-            && auth_data.subject.header.id == auth_data.object.as_ref().unwrap().header.id
+        if args.handler_data.from_object
+            && args.subject.header.id == args.object.as_ref().unwrap().header.id
             && path != "/"
         // ignore root's possible parent
         {
-            let parent_cinfo = auth_data
-                .object
-                .as_ref()
-                .unwrap()
-                .get_object_cinfo()
-                .unwrap();
+            let parent_cinfo = args.object.as_ref().unwrap().get_object_cinfo().unwrap();
             cinfo = parent_cinfo;
         }
 
@@ -230,8 +240,8 @@ async fn hierarchy_handler(
             node = config.node_by_cinfo(&cinfo).expect("node not found");
         }
 
-        let _ = auth_data.subject.clear_object_act();
-        let _ = auth_data.subject.clear_subject_act();
+        let _ = args.subject.clear_object_act();
+        let _ = args.subject.clear_subject_act();
     } else {
         node = config.node_by_cinfo(&cinfo).expect("node not found");
     }
@@ -249,36 +259,32 @@ async fn hierarchy_handler(
 
     println!(
         "{}: \"{}\" -> \"{}\"",
-        auth_data.evtype.header.name,
+        args.evtype.header.name,
         path,
         node.path()
     );
 
-    let _ = auth_data
-        .subject
-        .set_vs(node.virtual_space().to_member_bytes());
-    let _ = auth_data
+    let _ = args.subject.set_vs(node.virtual_space().to_member_bytes());
+    let _ = args
         .subject
         .set_vs_read(node.virtual_space().to_read_bytes());
-    let _ = auth_data
+    let _ = args
         .subject
         .set_vs_write(node.virtual_space().to_write_bytes());
-    let _ = auth_data
-        .subject
-        .set_vs_see(node.virtual_space().to_see_bytes());
-    if node.has_children() && auth_data.evtype.header.monitoring == Monitoring::Object {
-        let _ = auth_data
+    let _ = args.subject.set_vs_see(node.virtual_space().to_see_bytes());
+    if node.has_children() && args.evtype.header.monitoring == Monitoring::Object {
+        let _ = args
             .subject
-            .add_object_act(auth_data.evtype.header.monitoring_bit as usize);
-        let _ = auth_data
+            .add_object_act(args.evtype.header.monitoring_bit as usize);
+        let _ = args
             .subject
-            .add_subject_act(auth_data.evtype.header.monitoring_bit as usize);
+            .add_subject_act(args.evtype.header.monitoring_bit as usize);
     }
 
-    auth_data.subject.set_object_cinfo(cinfo).unwrap();
+    args.subject.set_object_cinfo(cinfo).unwrap();
 
-    ctx.update_object_no_wait(&auth_data.subject);
-    //ctx.update_object(&auth_data.subject).await;
+    ctx.update_object_no_wait(&args.subject);
+    //ctx.update_object(&args.subject).await;
 
     MedusaAnswer::Ok
 }

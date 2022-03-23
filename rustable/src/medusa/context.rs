@@ -1,7 +1,7 @@
 use crate::medusa::config::Config;
 use crate::medusa::{
-    AuthRequestData, FetchAnswer, MedusaClass, MedusaEvtype, MedusaRequest, Monitoring,
-    RequestType, UpdateAnswer, Writer,
+    FetchAnswer, MedusaClass, MedusaEvtype, MedusaRequest, Monitoring, RequestType, UpdateAnswer,
+    Writer,
 };
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -42,7 +42,8 @@ impl Context {
 
     pub async fn enter_tree(
         &self,
-        auth_data: &mut AuthRequestData,
+        evtype: &MedusaEvtype,
+        subject: &mut MedusaClass,
         primary_tree: &str,
         path: &str,
     ) {
@@ -58,42 +59,30 @@ impl Context {
             node = node.child_by_path(part).unwrap();
         }
 
-        let _ = auth_data.subject.clear_object_act();
-        let _ = auth_data.subject.clear_subject_act();
+        let _ = subject.clear_object_act();
+        let _ = subject.clear_subject_act();
 
         let cinfo = Arc::as_ptr(node) as usize;
 
         println!(
             "{}: \"{}\" -> \"{}\"",
-            auth_data.evtype.header.name,
+            evtype.header.name,
             path,
             node.path()
         );
 
-        let _ = auth_data
-            .subject
-            .set_vs(node.virtual_space().to_member_bytes());
-        let _ = auth_data
-            .subject
-            .set_vs_read(node.virtual_space().to_read_bytes());
-        let _ = auth_data
-            .subject
-            .set_vs_write(node.virtual_space().to_write_bytes());
-        let _ = auth_data
-            .subject
-            .set_vs_see(node.virtual_space().to_see_bytes());
-        if node.has_children() && auth_data.evtype.header.monitoring == Monitoring::Object {
-            let _ = auth_data
-                .subject
-                .add_object_act(auth_data.evtype.header.monitoring_bit as usize);
-            let _ = auth_data
-                .subject
-                .add_subject_act(auth_data.evtype.header.monitoring_bit as usize);
+        let _ = subject.set_vs(node.virtual_space().to_member_bytes());
+        let _ = subject.set_vs_read(node.virtual_space().to_read_bytes());
+        let _ = subject.set_vs_write(node.virtual_space().to_write_bytes());
+        let _ = subject.set_vs_see(node.virtual_space().to_see_bytes());
+        if node.has_children() && evtype.header.monitoring == Monitoring::Object {
+            let _ = subject.add_object_act(evtype.header.monitoring_bit as usize);
+            let _ = subject.add_subject_act(evtype.header.monitoring_bit as usize);
         }
 
-        auth_data.subject.set_object_cinfo(cinfo).unwrap();
+        subject.set_object_cinfo(cinfo).unwrap();
 
-        self.update_object(&auth_data.subject).await;
+        self.update_object(subject).await;
     }
 
     pub fn config(&self) -> &Config {

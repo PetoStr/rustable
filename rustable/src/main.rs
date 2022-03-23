@@ -1,7 +1,6 @@
 use anyhow::Result;
 use rustable::medusa::{
-    AuthRequestData, Config, ConfigError, Connection, Context, HandlerData, MedusaAnswer, Node,
-    SpaceBuilder, Tree,
+    Config, ConfigError, Connection, Context, HandlerArgs, MedusaAnswer, Node, SpaceBuilder, Tree,
 };
 use rustable_codegen::handler;
 use std::fs::OpenOptions;
@@ -9,16 +8,14 @@ use std::fs::OpenOptions;
 const MEDUSA_FILE_NAME: &str = "/dev/medusa";
 
 #[handler(subject = "*", event = "getprocess", object = "*")]
-async fn getprocess_handler(
-    _: &HandlerData,
-    ctx: &Context,
-    mut auth_data: AuthRequestData,
-) -> MedusaAnswer {
+async fn getprocess_handler(ctx: &Context, args: HandlerArgs<'_>) -> MedusaAnswer {
     println!("sample process handler");
 
-    ctx.enter_tree(&mut auth_data, "domains", "/").await;
+    let evtype = args.evtype;
+    let mut subject = args.subject;
 
-    let subject = &mut auth_data.subject;
+    ctx.enter_tree(&evtype, &mut subject, "domains", "/").await;
+
     println!(
         "subject cmdline = {}",
         subject.get_attribute::<String>("cmdline").unwrap()
@@ -30,51 +27,37 @@ async fn getprocess_handler(
         subject.set_attribute("med_sact", 0x3fffffff).unwrap();
     }
 
-    ctx.update_object(subject).await;
+    ctx.update_object(&subject).await;
 
     MedusaAnswer::Ok
 }
 
 #[handler(subject = "*", event = "getipc")]
-async fn getipc_handler(
-    _: &HandlerData,
-    ctx: &Context,
-    mut auth_data: AuthRequestData,
-) -> MedusaAnswer {
+async fn getipc_handler(ctx: &Context, args: HandlerArgs<'_>) -> MedusaAnswer {
     println!("getipc");
 
-    auth_data
-        .subject
-        .set_attribute("med_oact", 0x3fffffff)
-        .unwrap();
+    let mut subject = args.subject;
 
-    auth_data.subject.clear_vs().unwrap();
-    auth_data
-        .subject
+    subject.set_attribute("med_oact", 0x3fffffff).unwrap();
+
+    subject.clear_vs().unwrap();
+    subject
         .add_vs(*ctx.config().name_to_space_bit("all_files").unwrap())
         .unwrap();
 
-    ctx.update_object(&auth_data.subject).await;
+    ctx.update_object(&subject).await;
 
     MedusaAnswer::Ok
 }
 
 #[handler(subject = "all_domains", event = "ipc_msgsnd", object = "all_files")]
-async fn msgsnd_handler(
-    _: &HandlerData,
-    _ctx: &Context,
-    _auth_data: AuthRequestData,
-) -> MedusaAnswer {
+async fn msgsnd_handler(_ctx: &Context, _args: HandlerArgs<'_>) -> MedusaAnswer {
     println!("ipc_msgsnd");
     MedusaAnswer::Ok
 }
 
 #[handler(subject = "all_domains", event = "ipc_msgrcv", object = "all_files")]
-async fn msgrcv_handler(
-    _: &HandlerData,
-    _ctx: &Context,
-    _auth_data: AuthRequestData,
-) -> MedusaAnswer {
+async fn msgrcv_handler(_ctx: &Context, _args: HandlerArgs<'_>) -> MedusaAnswer {
     println!("ipc_msgrcv");
     MedusaAnswer::Ok
 }
