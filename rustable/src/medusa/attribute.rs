@@ -152,7 +152,7 @@ impl MedusaAttributes {
         let attr = self
             .inner
             .get_mut(attr_name)
-            .ok_or_else(|| AttributeError::UnknownAttribute(attr_name.to_owned()))?;
+            .ok_or_else(|| AttributeError::UnknownAttributeError(attr_name.to_owned()))?;
 
         if attr.header.is_read_only() {
             return Err(AttributeError::ModifyReadOnlyError(attr_name.to_owned()));
@@ -163,15 +163,18 @@ impl MedusaAttributes {
         Ok(())
     }
 
-    pub fn get(&self, attr_name: &str) -> Option<&[u8]> {
-        self.inner.get(attr_name).map(|x| &x.data[..])
+    pub fn get(&self, attr_name: &str) -> Result<&[u8], AttributeError> {
+        self.inner
+            .get(attr_name)
+            .map(|x| &x.data[..])
+            .ok_or_else(|| AttributeError::UnknownAttributeError(attr_name.to_owned()))
     }
 
     pub fn get_mut(&mut self, attr_name: &str) -> Result<&mut [u8], AttributeError> {
         let attr = self
             .inner
             .get_mut(attr_name)
-            .ok_or_else(|| AttributeError::UnknownAttribute(attr_name.to_owned()))?;
+            .ok_or_else(|| AttributeError::UnknownAttributeError(attr_name.to_owned()))?;
 
         Ok(&mut attr.data)
     }

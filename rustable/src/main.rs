@@ -8,7 +8,7 @@ use std::fs::OpenOptions;
 const MEDUSA_FILE_NAME: &str = "/dev/medusa";
 
 #[handler(subject_vs = "*", event = "getprocess", object_vs = "*")]
-async fn getprocess_handler(ctx: &Context, args: HandlerArgs<'_>) -> MedusaAnswer {
+async fn getprocess_handler(ctx: &Context, args: HandlerArgs<'_>) -> Result<MedusaAnswer> {
     println!("sample process handler");
 
     let evtype = args.evtype;
@@ -18,48 +18,54 @@ async fn getprocess_handler(ctx: &Context, args: HandlerArgs<'_>) -> MedusaAnswe
 
     println!(
         "subject cmdline = {}",
-        subject.get_attribute::<String>("cmdline").unwrap()
+        subject.get_attribute::<String>("cmdline")?
     );
 
-    if subject.get_attribute::<String>("cmdline").unwrap() == "./msg_test" {
-        subject.set_attribute::<u32>("med_sact", 0x0).unwrap();
+    if subject.get_attribute::<String>("cmdline")? == "./msg_test" {
+        subject.set_attribute::<u32>("med_sact", 0x0)?;
     } else {
-        subject.set_attribute("med_sact", 0x3fffffff).unwrap();
+        subject.set_attribute("med_sact", 0x3fffffff)?;
     }
 
     ctx.update_object(&subject).await;
 
-    MedusaAnswer::Ok
+    Ok(MedusaAnswer::Ok)
 }
 
 #[handler(subject_vs = "*", event = "getipc")]
-async fn getipc_handler(ctx: &Context, args: HandlerArgs<'_>) -> MedusaAnswer {
+async fn getipc_handler(ctx: &Context, args: HandlerArgs<'_>) -> Result<MedusaAnswer> {
     println!("getipc");
 
     let mut subject = args.subject;
 
-    subject.set_attribute("med_oact", 0x3fffffff).unwrap();
+    subject.set_attribute("med_oact", 0x3fffffff)?;
 
-    subject.clear_vs().unwrap();
-    subject
-        .add_vs(*ctx.config().name_to_space_bit("all_files").unwrap())
-        .unwrap();
+    subject.clear_vs()?;
+    subject.add_vs(*ctx.config().name_to_space_bit("all_files").unwrap())?;
 
     ctx.update_object(&subject).await;
 
-    MedusaAnswer::Ok
+    Ok(MedusaAnswer::Ok)
 }
 
-#[handler(subject_vs = "all_domains", event = "ipc_msgsnd", object_vs = "all_files")]
-async fn msgsnd_handler(_ctx: &Context, _args: HandlerArgs<'_>) -> MedusaAnswer {
+#[handler(
+    subject_vs = "all_domains",
+    event = "ipc_msgsnd",
+    object_vs = "all_files"
+)]
+async fn msgsnd_handler(_ctx: &Context, _args: HandlerArgs<'_>) -> Result<MedusaAnswer> {
     println!("ipc_msgsnd");
-    MedusaAnswer::Ok
+    Ok(MedusaAnswer::Ok)
 }
 
-#[handler(subject_vs = "all_domains", event = "ipc_msgrcv", object_vs = "all_files")]
-async fn msgrcv_handler(_ctx: &Context, _args: HandlerArgs<'_>) -> MedusaAnswer {
+#[handler(
+    subject_vs = "all_domains",
+    event = "ipc_msgrcv",
+    object_vs = "all_files"
+)]
+async fn msgrcv_handler(_ctx: &Context, _args: HandlerArgs<'_>) -> Result<MedusaAnswer> {
     println!("ipc_msgrcv");
-    MedusaAnswer::Ok
+    Ok(MedusaAnswer::Ok)
 }
 
 #[rustfmt::skip]

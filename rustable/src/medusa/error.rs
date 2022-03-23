@@ -16,7 +16,7 @@ pub enum ReaderError {
     #[error("{0}")]
     ParseError(String),
     #[error("unknown class with id 0x{0:x}")]
-    UnknownClass(u64),
+    UnknownClassError(u64),
 }
 
 #[derive(Error, Debug)]
@@ -29,7 +29,7 @@ pub enum ConnectionError {
     #[error("unknown byte order for greeting: 0x{0:x}")]
     UnknownByteOrder(u64),
     #[error("protocol version {0} is not supported")]
-    UnsupportedVersion(u64),
+    UnsupportedVersionError(u64),
 }
 
 #[derive(Error, Debug)]
@@ -40,20 +40,20 @@ pub enum CommunicationError {
     #[error(transparent)]
     ReaderError(#[from] ReaderError),
     #[error("unknown command: 0x{0:x}")]
-    UnknownCommand(Command),
+    UnknownCommandError(Command),
     #[error("unknown access type: 0x{0:x}")]
-    UnknownAccessType(u64),
+    UnknownAccessTypeError(u64),
     #[error("unknown subject type: 0x{0:x}")]
-    UnknownSubjectType(u64),
+    UnknownSubjectTypeError(u64),
     #[error("unknown object type: 0x{0:x}")]
-    UnknownObjectType(u64),
+    UnknownObjectTypeError(u64),
 }
 
 #[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum AttributeError {
     #[error("unknown attribute: \"{0}\"")]
-    UnknownAttribute(String),
+    UnknownAttributeError(String),
     #[error("cannot modify read-only attribute: \"{0}\"")]
     ModifyReadOnlyError(String),
 }

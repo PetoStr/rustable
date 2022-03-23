@@ -17,10 +17,11 @@ pub struct HandlerArgs<'a> {
     pub handler_data: &'a HandlerData,
 }
 
-pub type Handler = for<'a> fn(
-    ctx: &'a Context,
-    args: HandlerArgs<'a>,
-) -> Pin<Box<dyn Future<Output = MedusaAnswer> + Send + 'a>>;
+pub type Handler =
+    for<'a> fn(
+        ctx: &'a Context,
+        args: HandlerArgs<'a>,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<MedusaAnswer>> + Send + 'a>>;
 
 #[derive(Debug, Clone)]
 pub struct HandlerData {
@@ -44,7 +45,7 @@ macro_rules! force_boxed {
             args: $crate::medusa::HandlerArgs<'a>,
         ) -> ::std::pin::Pin<
             ::std::boxed::Box<
-                dyn ::std::future::Future<Output = $crate::medusa::MedusaAnswer>
+                dyn ::std::future::Future<Output = ::anyhow::Result<$crate::medusa::MedusaAnswer>>
                     + ::std::marker::Send
                     + 'a,
             >,
@@ -177,7 +178,9 @@ impl EventHandler {
             object: auth_data.object,
             handler_data: &self.data,
         };
-        (self.handler)(ctx, args).await
+        (self.handler)(ctx, args)
+            .await
+            .expect("Handler returned error")
     }
 
     pub(crate) fn is_applicable(
@@ -205,32 +208,32 @@ impl EventHandler {
     }
 }
 
-// TODO replace unwraps
-async fn hierarchy_handler(ctx: &Context, mut args: HandlerArgs<'_>) -> MedusaAnswer {
+async fn hierarchy_handler(ctx: &Context, args: HandlerArgs<'_>) -> anyhow::Result<MedusaAnswer> {
     let config = ctx.config();
+    let HandlerArgs {
+        mut subject,
+        object,
+        evtype,
+        handler_data,
+    } = args;
 
     let tree = config
-        .tree_by_name(&args.handler_data.primary_tree)
-        .unwrap_or_else(|| {
-            panic!(
-                "primary tree `{}` not found",
-                args.handler_data.primary_tree
-            )
-        });
+        .tree_by_name(&handler_data.primary_tree)
+        .unwrap_or_else(|| panic!("primary tree `{}` not found", handler_data.primary_tree));
 
-    let mut cinfo = args.subject.get_object_cinfo().unwrap();
+    let mut cinfo = subject.get_object_cinfo()?;
     let mut node;
 
-    let path_attr = args.handler_data.attribute.as_deref().unwrap_or("");
-    let path = cstr_to_string(args.evtype.get_attribute(path_attr).unwrap_or(b"\0"));
+    let path_attr = handler_data.attribute.as_deref().unwrap_or("");
+    let path = cstr_to_string(evtype.get_attribute(path_attr).unwrap_or(b"\0"));
 
     if cinfo == 0 {
-        if args.handler_data.from_object
-            && args.subject.header.id == args.object.as_ref().unwrap().header.id
+        if handler_data.from_object
+            && subject.header.id == object.as_ref().expect("No object.").header.id
             && path != "/"
         // ignore root's possible parent
         {
-            let parent_cinfo = args.object.as_ref().unwrap().get_object_cinfo().unwrap();
+            let parent_cinfo = object.as_ref().expect("No object.").get_object_cinfo()?;
             cinfo = parent_cinfo;
         }
 
@@ -240,8 +243,8 @@ async fn hierarchy_handler(ctx: &Context, mut args: HandlerArgs<'_>) -> MedusaAn
             node = config.node_by_cinfo(&cinfo).expect("node not found");
         }
 
-        let _ = args.subject.clear_object_act();
-        let _ = args.subject.clear_subject_act();
+        let _ = subject.clear_object_act();
+        let _ = subject.clear_subject_act();
     } else {
         node = config.node_by_cinfo(&cinfo).expect("node not found");
     }
@@ -252,39 +255,31 @@ async fn hierarchy_handler(ctx: &Context, mut args: HandlerArgs<'_>) -> MedusaAn
             node = child;
         } else {
             println!("{} not covered by tree", path);
-            return MedusaAnswer::Deny;
+            return Ok(MedusaAnswer::Deny);
         }
     }
     cinfo = Arc::as_ptr(node) as usize;
 
     println!(
         "{}: \"{}\" -> \"{}\"",
-        args.evtype.header.name,
+        evtype.header.name,
         path,
         node.path()
     );
 
-    let _ = args.subject.set_vs(node.virtual_space().to_member_bytes());
-    let _ = args
-        .subject
-        .set_vs_read(node.virtual_space().to_read_bytes());
-    let _ = args
-        .subject
-        .set_vs_write(node.virtual_space().to_write_bytes());
-    let _ = args.subject.set_vs_see(node.virtual_space().to_see_bytes());
-    if node.has_children() && args.evtype.header.monitoring == Monitoring::Object {
-        let _ = args
-            .subject
-            .add_object_act(args.evtype.header.monitoring_bit as usize);
-        let _ = args
-            .subject
-            .add_subject_act(args.evtype.header.monitoring_bit as usize);
+    let _ = subject.set_vs(node.virtual_space().to_member_bytes());
+    let _ = subject.set_vs_read(node.virtual_space().to_read_bytes());
+    let _ = subject.set_vs_write(node.virtual_space().to_write_bytes());
+    let _ = subject.set_vs_see(node.virtual_space().to_see_bytes());
+    if node.has_children() && evtype.header.monitoring == Monitoring::Object {
+        let _ = subject.add_object_act(evtype.header.monitoring_bit as usize);
+        let _ = subject.add_subject_act(evtype.header.monitoring_bit as usize);
     }
 
-    args.subject.set_object_cinfo(cinfo).unwrap();
+    subject.set_object_cinfo(cinfo)?;
 
-    ctx.update_object_no_wait(&args.subject);
-    //ctx.update_object(&args.subject).await;
+    ctx.update_object_no_wait(&subject);
+    //ctx.update_object(&subject).await;
 
-    MedusaAnswer::Ok
+    Ok(MedusaAnswer::Ok)
 }

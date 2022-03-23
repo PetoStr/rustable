@@ -58,7 +58,7 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
         println!("protocol version {}", version);
 
         if version != PROTOCOL_VERSION {
-            return Err(ConnectionError::UnsupportedVersion(version));
+            return Err(ConnectionError::UnsupportedVersionError(version));
         }
 
         println!();
@@ -140,7 +140,7 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
         let mut evtype = self
             .context
             .empty_evtype_from_id(&id)
-            .ok_or(CommunicationError::UnknownAccessType(id))?;
+            .ok_or(CommunicationError::UnknownAccessTypeError(id))?;
 
         let request_id = self.reader.read_u64().await?;
 
@@ -155,7 +155,7 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
         let mut subject = self
             .context
             .empty_class_from_id(&ev_sub)
-            .ok_or(CommunicationError::UnknownSubjectType(ev_sub))?;
+            .ok_or(CommunicationError::UnknownSubjectTypeError(ev_sub))?;
 
         // there seems to be padding so store into buffer first
         let mut sub_attrs_raw = vec![0; subject.header.size as usize];
@@ -168,7 +168,7 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
                 let mut object = self
                     .context
                     .empty_class_from_id(&ev_obj)
-                    .ok_or(CommunicationError::UnknownObjectType(ev_obj))?;
+                    .ok_or(CommunicationError::UnknownObjectTypeError(ev_obj))?;
 
                 let mut obj_attrs_raw = vec![0; object.header.size as usize];
                 self.reader.read_exact(&mut obj_attrs_raw).await?;

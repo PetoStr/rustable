@@ -183,11 +183,11 @@ impl MedusaClass {
         self.set_attribute(MEDUSA_OCINFO_ATTR_NAME, cinfo)
     }
 
-    pub fn get_object_cinfo(&self) -> Option<usize> {
+    pub fn get_object_cinfo(&self) -> Result<usize, AttributeError> {
         self.get_attribute::<usize>(MEDUSA_OCINFO_ATTR_NAME)
     }
 
-    pub fn get_vs(&self) -> Option<&[u8]> {
+    pub fn get_vs(&self) -> Result<&[u8], AttributeError> {
         self.attributes.get(MEDUSA_VS_ATTR_NAME)
     }
 
@@ -199,8 +199,8 @@ impl MedusaClass {
         self.attributes.set(attr_name, data.to_bytes())
     }
 
-    pub fn get_attribute<T: AttributeBytes>(&self, attr_name: &str) -> Option<T> {
-        Some(T::from_bytes(self.attributes.get(attr_name)?.to_vec()))
+    pub fn get_attribute<T: AttributeBytes>(&self, attr_name: &str) -> Result<T, AttributeError> {
+        Ok(T::from_bytes(self.attributes.get(attr_name)?.to_vec()))
     }
 
     pub fn pack_attributes(&self) -> Vec<u8> {

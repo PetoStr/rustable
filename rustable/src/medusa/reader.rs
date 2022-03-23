@@ -103,7 +103,7 @@ where
         let data_len = classes
             .get(&class_id)
             .map(|c| c.header.size as usize)
-            .ok_or(ReaderError::UnknownClass(class_id))?;
+            .ok_or(ReaderError::UnknownClassError(class_id))?;
 
         let mut buf = vec![0; data_len];
         self.read_exact(&mut buf).await?;

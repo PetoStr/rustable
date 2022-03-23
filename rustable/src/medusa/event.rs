@@ -1,4 +1,5 @@
 use crate::medusa::constants::*;
+use crate::medusa::error::AttributeError;
 use crate::medusa::MedusaAttributes;
 use std::mem;
 use std::num::NonZeroU64;
@@ -55,7 +56,7 @@ pub struct MedusaEvtype {
 }
 
 impl MedusaEvtype {
-    pub fn get_attribute(&self, attr_name: &str) -> Option<&[u8]> {
+    pub fn get_attribute(&self, attr_name: &str) -> Result<&[u8], AttributeError> {
         self.attributes.get(attr_name)
     }
 
