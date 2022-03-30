@@ -1,5 +1,6 @@
 use crate::bitmap;
 use crate::medusa::constants::*;
+use crate::medusa::space::VirtualSpace;
 use crate::medusa::{AttributeBytes, AttributeError, MedusaAttributes};
 use std::{fmt, mem};
 
@@ -37,6 +38,13 @@ pub struct MedusaClass {
 }
 
 impl MedusaClass {
+    pub fn set_access_types(&mut self, vs: &VirtualSpace) {
+        let _ = self.set_vs(vs.to_at_bytes(AccessType::Member));
+        let _ = self.set_vs_read(vs.to_at_bytes(AccessType::Read));
+        let _ = self.set_vs_write(vs.to_at_bytes(AccessType::Write));
+        let _ = self.set_vs_see(vs.to_at_bytes(AccessType::See));
+    }
+
     pub fn add_vs(&mut self, n: usize) -> Result<(), AttributeError> {
         let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME)?;
         bitmap::set_bit(vs, n);

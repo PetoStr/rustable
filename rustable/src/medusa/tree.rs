@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::medusa::constants::NODE_HIGHEST_PRIORITY;
+use crate::medusa::constants::{AccessType, NODE_HIGHEST_PRIORITY};
 use crate::medusa::space::{Space, SpaceDef, VirtualSpace};
 use crate::medusa::ConfigError;
 use regex::Regex;
@@ -63,10 +63,7 @@ pub struct NodeBuilder {
     path: &'static str,
     regex_path: &'static str,
 
-    member_of: HashSet<&'static str>,
-    reads: HashSet<&'static str>,
-    writes: HashSet<&'static str>,
-    sees: HashSet<&'static str>,
+    at_names: [HashSet<&'static str>; AccessType::Length as usize],
 
     children: BTreeMap<u16, HashMap<String, NodeBuilder>>,
 }
@@ -85,23 +82,8 @@ impl NodeBuilder {
         self
     }
 
-    pub fn member_of(mut self, name: &'static str) -> Self {
-        self.member_of.insert(name);
-        self
-    }
-
-    pub fn reads(mut self, name: &'static str) -> Self {
-        self.reads.insert(name);
-        self
-    }
-
-    pub fn writes(mut self, name: &'static str) -> Self {
-        self.writes.insert(name);
-        self
-    }
-
-    pub fn sees(mut self, name: &'static str) -> Self {
-        self.sees.insert(name);
+    pub fn add_access_type(mut self, at: AccessType, name: &'static str) -> Self {
+        self.at_names[at as usize].insert(name);
         self
     }
 
@@ -135,20 +117,22 @@ impl NodeBuilder {
             .or_insert_with(|| NodeBuilder::new().with_path(path))
     }
 
-    pub(crate) fn set_access<I>(&mut self, reads: I, writes: I, sees: I)
-    where
-        I: Iterator<Item = &'static str>,
-    {
-        self.reads.extend(reads);
-        self.writes.extend(writes);
-        self.sees.extend(sees);
+    pub(crate) fn set_access_without_member(
+        &mut self,
+        at_names: &[Vec<&'static str>; AccessType::Length as usize],
+    ) {
+        for (r#type, set) in self.at_names.iter_mut().enumerate() {
+            if r#type != AccessType::Member as usize {
+                set.extend(&at_names[r#type as usize]);
+            }
+        }
     }
 
     pub(crate) fn member_of_include_or_exclude(&mut self, name: &'static str, include: bool) {
         if include {
-            self.member_of.insert(name);
+            self.at_names[AccessType::Member as usize].insert(name);
         } else {
-            self.member_of.remove(name);
+            self.at_names[AccessType::Member as usize].remove(name);
         }
     }
 
@@ -167,24 +151,19 @@ impl NodeBuilder {
 
         let path_regex = Regex::new(self.path)?;
 
-        // define new spaces which may not exist yet
-        self.member_of
+        // define new spaces which may not exist yet (assign an id for every new name)
+        self.at_names
             .iter()
-            .for_each(|space| def.define_space(space));
-        self.reads.iter().for_each(|space| def.define_space(space));
-        self.writes.iter().for_each(|space| def.define_space(space));
-        self.sees.iter().for_each(|space| def.define_space(space));
+            .for_each(|names| names.iter().for_each(|space| def.define_space(space)));
 
-        let member_of: Vec<Space> = self.member_of.iter().map(|x| Space::ByName(x)).collect();
-        let reads: Vec<Space> = self.reads.iter().map(|x| Space::ByName(x)).collect();
-        let writes: Vec<Space> = self.writes.iter().map(|x| Space::ByName(x)).collect();
-        let sees: Vec<Space> = self.sees.iter().map(|x| Space::ByName(x)).collect();
+        let spaces = self
+            .at_names
+            .into_iter()
+            .map(|names| names.into_iter().map(Space::ByName).collect::<Vec<Space>>())
+            .collect::<Vec<Vec<Space>>>();
 
         let mut vs = VirtualSpace::new();
-        vs.set_member(def, &member_of);
-        vs.set_read(def, &reads);
-        vs.set_write(def, &writes);
-        vs.set_see(def, &sees);
+        vs.set_access_types(def, &spaces.try_into().unwrap());
 
         let node = Arc::new(Node {
             path_regex,

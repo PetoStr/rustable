@@ -91,11 +91,7 @@ impl ConfigBuilder {
 
         let parsed_path = ParsedPath::new(path);
         let last_node = self.update_or_create_tree_by_path(parsed_path, recursive, name, true);
-        last_node.set_access(
-            space.reads.iter().copied(),
-            space.writes.iter().copied(),
-            space.sees.iter().copied(),
-        );
+        last_node.set_access_without_member(&space.at_names);
 
         for (include_path, recursive) in space.include_path {
             let parsed_path = ParsedPath::new(include_path);

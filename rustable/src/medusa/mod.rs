@@ -7,6 +7,7 @@ pub mod config;
 pub use config::Config;
 
 mod constants;
+pub use constants::AccessType;
 
 pub mod class;
 pub use class::{MedusaClass, MedusaClassHeader};
@@ -40,7 +41,7 @@ pub use request::{
 };
 
 mod space;
-pub use space::{Space, SpaceBuilder};
+pub use space::{Space, SpaceBuilder, VirtualSpace};
 
 pub mod tree;
 pub use tree::{Node, NodeBuilder, Tree, TreeBuilder};

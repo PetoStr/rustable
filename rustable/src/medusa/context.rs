@@ -71,10 +71,7 @@ impl Context {
             node.path()
         );
 
-        let _ = subject.set_vs(node.virtual_space().to_member_bytes());
-        let _ = subject.set_vs_read(node.virtual_space().to_read_bytes());
-        let _ = subject.set_vs_write(node.virtual_space().to_write_bytes());
-        let _ = subject.set_vs_see(node.virtual_space().to_see_bytes());
+        subject.set_access_types(node.virtual_space());
         if node.has_children() && evtype.header.monitoring == Monitoring::Object {
             let _ = subject.add_object_act(evtype.header.monitoring_bit as usize);
             let _ = subject.add_subject_act(evtype.header.monitoring_bit as usize);

@@ -1,4 +1,5 @@
 use crate::bitmap;
+use crate::medusa::constants::AccessType;
 use std::collections::HashMap;
 
 #[derive(Debug, Default, Clone)]
@@ -6,9 +7,7 @@ pub struct SpaceBuilder {
     pub(crate) name: Option<&'static str>,
     pub(crate) path: Option<(&'static str, bool)>,
 
-    pub(crate) reads: Vec<&'static str>,
-    pub(crate) writes: Vec<&'static str>,
-    pub(crate) sees: Vec<&'static str>,
+    pub(crate) at_names: [Vec<&'static str>; AccessType::Length as usize],
 
     pub(crate) include_space: Vec<&'static str>,
     pub(crate) exclude_space: Vec<&'static str>,
@@ -50,17 +49,17 @@ impl SpaceBuilder {
     }
 
     pub fn reads(mut self, names: Vec<&'static str>) -> Self {
-        self.reads.extend(names);
+        self.at_names[AccessType::Read as usize].extend(names);
         self
     }
 
     pub fn writes(mut self, names: Vec<&'static str>) -> Self {
-        self.writes.extend(names);
+        self.at_names[AccessType::Write as usize].extend(names);
         self
     }
 
     pub fn sees(mut self, names: Vec<&'static str>) -> Self {
-        self.sees.extend(names);
+        self.at_names[AccessType::See as usize].extend(names);
         self
     }
 
@@ -95,7 +94,7 @@ impl SpaceBuilder {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Space {
     All,
     ByName(&'static str),
@@ -154,48 +153,27 @@ impl SpaceDef {
 }
 
 #[derive(Debug, Default, Clone)]
-pub(crate) struct VirtualSpace {
-    member: Vec<u8>,
-    read: Vec<u8>,
-    write: Vec<u8>,
-    see: Vec<u8>,
+pub struct VirtualSpace {
+    access_types: [Vec<u8>; AccessType::Length as usize],
 }
 
 impl VirtualSpace {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Default::default()
     }
 
-    pub(crate) fn set_member(&mut self, def: &SpaceDef, spaces: &[Space]) {
-        self.member = spaces_to_bitmap(spaces, def);
+    pub(crate) fn set_access_types(
+        &mut self,
+        def: &SpaceDef,
+        spaces: &[Vec<Space>; AccessType::Length as usize],
+    ) {
+        for (at, space) in self.access_types.iter_mut().zip(spaces.iter()) {
+            *at = spaces_to_bitmap(space, def);
+        }
     }
 
-    pub(crate) fn set_read(&mut self, def: &SpaceDef, spaces: &[Space]) {
-        self.read = spaces_to_bitmap(spaces, def);
-    }
-
-    pub(crate) fn set_write(&mut self, def: &SpaceDef, spaces: &[Space]) {
-        self.write = spaces_to_bitmap(spaces, def);
-    }
-
-    pub(crate) fn set_see(&mut self, def: &SpaceDef, spaces: &[Space]) {
-        self.see = spaces_to_bitmap(spaces, def);
-    }
-
-    pub(crate) fn to_member_bytes(&self) -> Vec<u8> {
-        self.member.clone()
-    }
-
-    pub(crate) fn to_read_bytes(&self) -> Vec<u8> {
-        self.read.clone()
-    }
-
-    pub(crate) fn to_write_bytes(&self) -> Vec<u8> {
-        self.write.clone()
-    }
-
-    pub(crate) fn to_see_bytes(&self) -> Vec<u8> {
-        self.see.clone()
+    pub fn to_at_bytes(&self, at: AccessType) -> Vec<u8> {
+        self.access_types[at as usize].clone()
     }
 }
 

@@ -108,3 +108,14 @@ pub const MEDUSA_VSS_ATTR_NAME: &str = "vss";
 pub const MEDUSA_OACT_ATTR_NAME: &str = "med_oact";
 pub const MEDUSA_SACT_ATTR_NAME: &str = "med_sact";
 pub const MEDUSA_OCINFO_ATTR_NAME: &str = "o_cinfo";
+
+#[repr(usize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum AccessType {
+    Member = 0,
+    See,
+    Read,
+    Write,
+
+    Length,
+}

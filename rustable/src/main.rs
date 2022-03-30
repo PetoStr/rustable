@@ -1,6 +1,7 @@
 use anyhow::Result;
 use rustable::medusa::{
-    Config, ConfigError, Connection, Context, HandlerArgs, MedusaAnswer, Node, SpaceBuilder, Tree,
+    AccessType, Config, ConfigError, Connection, Context, HandlerArgs, MedusaAnswer, Node,
+    SpaceBuilder, Tree,
 };
 use rustable_codegen::handler;
 use std::fs::OpenOptions;
@@ -104,12 +105,12 @@ fn create_config() -> Result<Config, ConfigError> {
                 .with_path("/")
                 .add_node(Node::builder()
                     .with_path(r"root")
-                    .member_of("sample")
+                    .add_access_type(AccessType::Member, "sample")
                     .add_node(Node::builder()
                         .with_path(r"1")
                     )
                     .add_node_with_priority(1000, Node::builder()
-                        .member_of("sample")
+                        .add_access_type(AccessType::Member, "sample")
                         .with_path(r".*")
                     )
                 )
