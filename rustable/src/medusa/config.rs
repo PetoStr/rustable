@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::medusa::constants::{NODE_HIGHEST_PRIORITY, NODE_LOWEST_PRIORITY};
+use crate::medusa::constants::{HandlerFlags, NODE_HIGHEST_PRIORITY, NODE_LOWEST_PRIORITY};
 use crate::medusa::error::ConfigError;
 use crate::medusa::handler::{CustomHandler, EventHandler, EventHandlerBuilder};
 use crate::medusa::space::{SpaceBuilder, SpaceDef};
@@ -135,11 +135,11 @@ impl ConfigBuilder {
         event: &'static str,
         primary_tree: &str,
         attribute: Option<&str>,
-        from_object: bool,
+        flags: HandlerFlags,
     ) -> Self {
         let event_handler = EventHandlerBuilder::new()
             .event(event)
-            .with_hierarchy_handler(primary_tree, attribute, from_object);
+            .with_hierarchy_handler(primary_tree, attribute, flags);
 
         let event = event_handler.event.to_string();
         self.event_handlers

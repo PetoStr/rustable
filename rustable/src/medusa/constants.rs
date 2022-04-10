@@ -119,3 +119,10 @@ pub enum AccessType {
 
     Length,
 }
+
+bitflags! {
+    #[derive(Default)]
+    pub struct HandlerFlags: u8 {
+        const FROM_OBJECT = 0x01;
+    }
+}

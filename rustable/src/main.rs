@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rustable::medusa::{
-    AccessType, Config, ConfigError, Connection, Context, HandlerArgs, MedusaAnswer, Node,
-    SpaceBuilder, Tree,
+    AccessType, Config, ConfigError, Connection, Context, HandlerArgs, HandlerFlags, MedusaAnswer,
+    Node, SpaceBuilder, Tree,
 };
 use rustable_codegen::handler;
 use std::fs::OpenOptions;
@@ -124,7 +124,7 @@ fn create_config() -> Result<Config, ConfigError> {
         .add_space(special)
         .add_space(one)
 
-        .add_hierarchy_event_handler("getfile", "fs", Some("filename"), true)
+        .add_hierarchy_event_handler("getfile", "fs", Some("filename"), HandlerFlags::FROM_OBJECT)
         .add_custom_event_handler(getprocess_handler)
         .add_custom_event_handler(getipc_handler)
         .add_custom_event_handler(msgsnd_handler)

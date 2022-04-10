@@ -1,7 +1,9 @@
 use crate::bitmap;
 use crate::cstr_to_string;
 use crate::medusa::space::{spaces_to_bitmap, Space, SpaceDef};
-use crate::medusa::{AuthRequestData, Context, MedusaAnswer, MedusaClass, MedusaEvtype};
+use crate::medusa::{
+    AuthRequestData, Context, HandlerFlags, MedusaAnswer, MedusaClass, MedusaEvtype,
+};
 use derivative::Derivative;
 use std::future::Future;
 use std::pin::Pin;
@@ -24,7 +26,7 @@ pub type Handler =
 pub struct HandlerData {
     pub event: String,
     pub attribute: Option<String>,
-    pub from_object: bool,
+    pub flags: HandlerFlags,
 
     pub primary_tree: String,
 
@@ -69,7 +71,7 @@ pub trait CustomHandler {
 pub struct EventHandlerBuilder {
     pub(crate) event: &'static str,
     attribute: Option<String>,
-    from_object: bool,
+    flags: HandlerFlags,
     primary_tree: String,
 
     subject: Option<Space>,
@@ -93,14 +95,14 @@ impl EventHandlerBuilder {
         mut self,
         primary_tree: &str,
         attribute: Option<&str>,
-        from_object: bool,
+        flags: HandlerFlags,
     ) -> Self {
         if self.handler.is_some() {
             panic!("handler already set");
         }
 
         self.attribute = attribute.map(|x| x.to_owned());
-        self.from_object = from_object;
+        self.flags = flags;
         self.subject = Some(Space::All);
         self.object = Some(Space::All);
         self.primary_tree = primary_tree.to_owned();
@@ -143,7 +145,7 @@ impl EventHandlerBuilder {
             data: HandlerData {
                 event: self.event.to_string(),
                 attribute: self.attribute,
-                from_object: self.from_object,
+                flags: self.flags,
                 primary_tree: self.primary_tree,
                 subject_vs,
                 object_vs,
@@ -225,7 +227,7 @@ async fn hierarchy_handler(ctx: &Context, args: HandlerArgs<'_>) -> anyhow::Resu
     let path = cstr_to_string(evtype.get_attribute(path_attr).unwrap_or(b"\0"));
 
     if cinfo == 0 {
-        if handler_data.from_object
+        if handler_data.flags.contains(HandlerFlags::FROM_OBJECT)
             && subject.header.id == object.as_ref().expect("No object.").header.id
             && path != "/"
         // ignore root's possible parent

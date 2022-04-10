@@ -7,7 +7,7 @@ pub mod config;
 pub use config::Config;
 
 mod constants;
-pub use constants::AccessType;
+pub use constants::{AccessType, HandlerFlags};
 
 pub mod class;
 pub use class::{MedusaClass, MedusaClassHeader};
