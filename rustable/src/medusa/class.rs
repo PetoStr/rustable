@@ -89,7 +89,7 @@ impl MedusaClass {
 
         self.set_object_cinfo(cinfo).unwrap();
 
-        ctx.update_object(self).await;
+        self.update(ctx).await;
     }
 
     pub fn set_access_types(&mut self, vs: &VirtualSpace) {
@@ -97,6 +97,29 @@ impl MedusaClass {
         let _ = self.set_vs_read(vs.to_at_bytes(AccessType::Read));
         let _ = self.set_vs_write(vs.to_at_bytes(AccessType::Write));
         let _ = self.set_vs_see(vs.to_at_bytes(AccessType::See));
+    }
+
+    pub async fn update(&self, ctx: &Context) -> i32 {
+        let data = self.pack_attributes();
+        let id = self.header.id;
+
+        let answer = ctx.update_request(id, &data).await;
+
+        answer.status
+    }
+
+    /// Perform fetch request. In case that the returned object has not yet been registered,
+    /// `None` is returned.
+    pub async fn fetch(&self, ctx: &Context) -> Option<MedusaClass> {
+        let data = self.pack_attributes();
+        let id = self.header.id;
+
+        let answer = ctx.fetch_request(id, &data).await;
+
+        let mut object = ctx.empty_class_from_id(&answer.class_id)?;
+        object.attributes.set_from_raw(&answer.data);
+
+        Some(object)
     }
 
     pub fn add_vs(&mut self, n: usize) -> Result<(), AttributeError> {

@@ -71,23 +71,12 @@ impl Context {
         self.empty_evtype_from_id(&evtype_id)
     }
 
-    pub fn update_object_no_wait(&self, object: &MedusaClass) {
+    pub async fn update_request(&self, class_id: u64, data: &[u8]) -> UpdateAnswer {
         let req = MedusaRequest {
             req_type: RequestType::Update,
-            class_id: object.header.id,
+            class_id,
             id: self.get_new_request_id(),
-            data: &object.pack_attributes(),
-        };
-
-        self.writer.write(Arc::from(req.to_vec()));
-    }
-
-    pub async fn update_object(&self, object: &MedusaClass) -> UpdateAnswer {
-        let req = MedusaRequest {
-            req_type: RequestType::Update,
-            class_id: object.header.id,
-            id: self.get_new_request_id(),
-            data: &object.pack_attributes(),
+            data,
         };
 
         let (sender, mut receiver) = mpsc::unbounded_channel();
@@ -98,12 +87,12 @@ impl Context {
         receiver.recv().await.expect("channel is disconnected")
     }
 
-    pub async fn fetch_object(&self, object: &MedusaClass) -> FetchAnswer {
+    pub async fn fetch_request(&self, class_id: u64, data: &[u8]) -> FetchAnswer {
         let req = MedusaRequest {
             req_type: RequestType::Fetch,
-            class_id: object.header.id,
+            class_id,
             id: self.get_new_request_id(),
-            data: &object.pack_attributes(),
+            data,
         };
 
         let (sender, mut receiver) = mpsc::unbounded_channel();

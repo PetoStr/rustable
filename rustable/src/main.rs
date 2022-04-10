@@ -28,7 +28,7 @@ async fn getprocess_handler(ctx: &Context, args: HandlerArgs<'_>) -> Result<Medu
         subject.set_attribute("med_sact", 0x3fffffff)?;
     }
 
-    ctx.update_object(&subject).await;
+    subject.update(ctx).await;
 
     Ok(MedusaAnswer::Ok)
 }
@@ -44,7 +44,7 @@ async fn getipc_handler(ctx: &Context, args: HandlerArgs<'_>) -> Result<MedusaAn
     subject.clear_vs()?;
     subject.add_vs(*ctx.config().name_to_space_bit("all_files").unwrap())?;
 
-    ctx.update_object(&subject).await;
+    subject.update(ctx).await;
 
     Ok(MedusaAnswer::Ok)
 }
