@@ -1,7 +1,10 @@
 use crate::bitmap;
 use crate::medusa::constants::*;
 use crate::medusa::space::VirtualSpace;
-use crate::medusa::{AttributeBytes, AttributeError, MedusaAttributes};
+use crate::medusa::{
+    AttributeBytes, AttributeError, Context, MedusaAttributes, MedusaEvtype, Monitoring, Node,
+};
+use std::sync::Arc;
 use std::{fmt, mem};
 
 #[derive(Default, Clone)]
@@ -38,6 +41,57 @@ pub struct MedusaClass {
 }
 
 impl MedusaClass {
+    pub async fn enter_tree(
+        &mut self,
+        ctx: &Context,
+        evtype: &MedusaEvtype,
+        primary_tree: &str,
+        path: &str,
+    ) {
+        assert!(path.starts_with('/'));
+
+        let tree = ctx
+            .config()
+            .tree_by_name(primary_tree)
+            .unwrap_or_else(|| panic!("primary tree `{}` not found", primary_tree));
+
+        let mut node = tree.root();
+        for part in path.split_terminator('/') {
+            node = node.child_by_path(part).unwrap();
+        }
+
+        println!(
+            "{}: \"{}\" -> \"{}\"",
+            evtype.header.name,
+            path,
+            node.path()
+        );
+
+        self.enter_tree_with_node(ctx, evtype, node).await;
+    }
+
+    pub async fn enter_tree_with_node(
+        &mut self,
+        ctx: &Context,
+        evtype: &MedusaEvtype,
+        node: &Arc<Node>,
+    ) {
+        let _ = self.clear_object_act();
+        let _ = self.clear_subject_act();
+
+        let cinfo = Arc::as_ptr(node) as usize;
+
+        self.set_access_types(node.virtual_space());
+        if node.has_children() && evtype.header.monitoring == Monitoring::Object {
+            let _ = self.add_object_act(evtype.header.monitoring_bit as usize);
+            let _ = self.add_subject_act(evtype.header.monitoring_bit as usize);
+        }
+
+        self.set_object_cinfo(cinfo).unwrap();
+
+        ctx.update_object(self).await;
+    }
+
     pub fn set_access_types(&mut self, vs: &VirtualSpace) {
         let _ = self.set_vs(vs.to_at_bytes(AccessType::Member));
         let _ = self.set_vs_read(vs.to_at_bytes(AccessType::Read));

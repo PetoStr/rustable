@@ -15,7 +15,7 @@ async fn getprocess_handler(ctx: &Context, args: HandlerArgs<'_>) -> Result<Medu
     let evtype = args.evtype;
     let mut subject = args.subject;
 
-    ctx.enter_tree(&evtype, &mut subject, "domains", "/").await;
+    subject.enter_tree(ctx, &evtype, "domains", "/").await;
 
     println!(
         "subject cmdline = {}",

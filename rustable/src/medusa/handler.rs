@@ -1,13 +1,10 @@
 use crate::bitmap;
 use crate::cstr_to_string;
 use crate::medusa::space::{spaces_to_bitmap, Space, SpaceDef};
-use crate::medusa::{
-    AuthRequestData, Context, MedusaAnswer, MedusaClass, MedusaEvtype, Monitoring,
-};
+use crate::medusa::{AuthRequestData, Context, MedusaAnswer, MedusaClass, MedusaEvtype};
 use derivative::Derivative;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 
 pub struct HandlerArgs<'a> {
     pub evtype: MedusaEvtype,
@@ -258,7 +255,6 @@ async fn hierarchy_handler(ctx: &Context, args: HandlerArgs<'_>) -> anyhow::Resu
             return Ok(MedusaAnswer::Deny);
         }
     }
-    cinfo = Arc::as_ptr(node) as usize;
 
     println!(
         "{}: \"{}\" -> \"{}\"",
@@ -267,16 +263,7 @@ async fn hierarchy_handler(ctx: &Context, args: HandlerArgs<'_>) -> anyhow::Resu
         node.path()
     );
 
-    subject.set_access_types(node.virtual_space());
-    if node.has_children() && evtype.header.monitoring == Monitoring::Object {
-        let _ = subject.add_object_act(evtype.header.monitoring_bit as usize);
-        let _ = subject.add_subject_act(evtype.header.monitoring_bit as usize);
-    }
-
-    subject.set_object_cinfo(cinfo)?;
-
-    ctx.update_object_no_wait(&subject);
-    //ctx.update_object(&subject).await;
+    subject.enter_tree_with_node(ctx, &evtype, node).await;
 
     Ok(MedusaAnswer::Ok)
 }

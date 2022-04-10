@@ -1,7 +1,6 @@
 use crate::medusa::config::Config;
 use crate::medusa::{
-    FetchAnswer, MedusaClass, MedusaEvtype, MedusaRequest, Monitoring, RequestType, UpdateAnswer,
-    Writer,
+    FetchAnswer, MedusaClass, MedusaEvtype, MedusaRequest, RequestType, UpdateAnswer, Writer,
 };
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -38,48 +37,6 @@ impl Context {
             config,
             request_id_cn: AtomicU64::new(111),
         }
-    }
-
-    pub async fn enter_tree(
-        &self,
-        evtype: &MedusaEvtype,
-        subject: &mut MedusaClass,
-        primary_tree: &str,
-        path: &str,
-    ) {
-        assert!(path.starts_with('/'));
-
-        let tree = self
-            .config
-            .tree_by_name(primary_tree)
-            .unwrap_or_else(|| panic!("primary tree `{}` not found", primary_tree));
-
-        let mut node = tree.root();
-        for part in path.split_terminator('/') {
-            node = node.child_by_path(part).unwrap();
-        }
-
-        let _ = subject.clear_object_act();
-        let _ = subject.clear_subject_act();
-
-        let cinfo = Arc::as_ptr(node) as usize;
-
-        println!(
-            "{}: \"{}\" -> \"{}\"",
-            evtype.header.name,
-            path,
-            node.path()
-        );
-
-        subject.set_access_types(node.virtual_space());
-        if node.has_children() && evtype.header.monitoring == Monitoring::Object {
-            let _ = subject.add_object_act(evtype.header.monitoring_bit as usize);
-            let _ = subject.add_subject_act(evtype.header.monitoring_bit as usize);
-        }
-
-        subject.set_object_cinfo(cinfo).unwrap();
-
-        self.update_object(subject).await;
     }
 
     pub fn config(&self) -> &Config {
