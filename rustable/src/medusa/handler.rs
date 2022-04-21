@@ -179,7 +179,7 @@ impl EventHandler {
         };
         (self.handler)(ctx, args)
             .await
-            .expect("Handler returned error")
+            .unwrap_or(MedusaAnswer::Err)
     }
 
     pub(crate) fn is_applicable(

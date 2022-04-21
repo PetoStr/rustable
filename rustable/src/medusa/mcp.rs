@@ -121,7 +121,7 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
                 Ok(answer) => answer,
                 Err(error) => {
                     eprintln!("{}", error);
-                    DEFAULT_ANSWER
+                    MedusaAnswer::Err
                 }
             };
 
