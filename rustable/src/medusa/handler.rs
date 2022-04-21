@@ -267,5 +267,5 @@ async fn hierarchy_handler(ctx: &Context, args: HandlerArgs<'_>) -> anyhow::Resu
 
     subject.enter_tree_with_node(ctx, &evtype, node).await;
 
-    Ok(MedusaAnswer::Ok)
+    Ok(MedusaAnswer::Allow)
 }

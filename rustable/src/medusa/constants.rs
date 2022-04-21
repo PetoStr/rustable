@@ -6,7 +6,7 @@ use bitflags::bitflags;
 pub const PROTOCOL_VERSION: u64 = 2;
 
 #[cfg(debug_assertions)]
-pub const DEFAULT_ANSWER: MedusaAnswer = MedusaAnswer::Ok;
+pub const DEFAULT_ANSWER: MedusaAnswer = MedusaAnswer::Allow;
 
 #[cfg(not(debug_assertions))]
 pub const DEFAULT_ANSWER: MedusaAnswer = MedusaAnswer::Deny;

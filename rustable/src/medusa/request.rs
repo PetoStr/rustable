@@ -88,7 +88,7 @@ pub enum MedusaAnswer {
     Yes = 0,
     Deny,
     Skip,
-    Ok,
+    Allow,
 }
 
 #[derive(Clone, Debug)]

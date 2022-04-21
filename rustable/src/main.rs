@@ -30,7 +30,7 @@ async fn getprocess_handler(ctx: &Context, args: HandlerArgs<'_>) -> Result<Medu
 
     subject.update(ctx).await;
 
-    Ok(MedusaAnswer::Ok)
+    Ok(MedusaAnswer::Allow)
 }
 
 #[handler(subject_vs = "*", event = "getipc")]
@@ -46,7 +46,7 @@ async fn getipc_handler(ctx: &Context, args: HandlerArgs<'_>) -> Result<MedusaAn
 
     subject.update(ctx).await;
 
-    Ok(MedusaAnswer::Ok)
+    Ok(MedusaAnswer::Allow)
 }
 
 #[handler(
@@ -56,7 +56,7 @@ async fn getipc_handler(ctx: &Context, args: HandlerArgs<'_>) -> Result<MedusaAn
 )]
 async fn msgsnd_handler(_ctx: &Context, _args: HandlerArgs<'_>) -> Result<MedusaAnswer> {
     println!("ipc_msgsnd");
-    Ok(MedusaAnswer::Ok)
+    Ok(MedusaAnswer::Allow)
 }
 
 #[handler(
@@ -66,7 +66,7 @@ async fn msgsnd_handler(_ctx: &Context, _args: HandlerArgs<'_>) -> Result<Medusa
 )]
 async fn msgrcv_handler(_ctx: &Context, _args: HandlerArgs<'_>) -> Result<MedusaAnswer> {
     println!("ipc_msgrcv");
-    Ok(MedusaAnswer::Ok)
+    Ok(MedusaAnswer::Allow)
 }
 
 #[rustfmt::skip]
