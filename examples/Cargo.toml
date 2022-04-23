@@ -1,0 +1,15 @@
+[package]
+name = "examples"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[dev-dependencies]
+anyhow = { version = "1.0.52", features = ["backtrace"] }
+rustable = { version = "0.1.0", path = "../rustable" }
+rustable-codegen = { version = "0.1.0", path = "../rustable-codegen" }
+tokio = { version = "1", features = ["full"] }
+
+[[example]]
+name = "getipc"
+path = "getipc.rs"
