@@ -87,7 +87,9 @@ impl ConfigBuilder {
         let path = space.path();
         let recursive = space.recursive();
 
-        self.space_to_path.insert(name, (path, recursive));
+        if self.space_to_path.insert(name, (path, recursive)).is_some() {
+            panic!("duplicate space name \"{name}\"");
+        }
 
         let parsed_path = ParsedPath::new(path);
         let last_node = self.update_or_create_tree_by_path(parsed_path, recursive, name, true);
