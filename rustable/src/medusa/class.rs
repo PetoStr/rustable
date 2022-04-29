@@ -56,8 +56,11 @@ impl MedusaClass {
             .unwrap_or_else(|| panic!("primary tree `{}` not found", primary_tree));
 
         let mut node = tree.root();
-        for part in path.split_terminator('/') {
-            node = node.child_by_path(part).unwrap();
+        if path != "/" {
+            // skip empty string caused by leading '/'
+            for part in path.split_terminator('/').skip(1) {
+                node = node.child_by_path(part).unwrap();
+            }
         }
 
         println!(
