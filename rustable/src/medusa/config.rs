@@ -115,6 +115,16 @@ impl ConfigBuilder {
         self
     }
 
+    pub fn add_spaces<I>(mut self, spaces: I) -> Self
+    where
+        I: IntoIterator<Item = SpaceBuilder>,
+    {
+        for space in spaces {
+            self = self.add_space(space);
+        }
+        self
+    }
+
     pub fn add_tree(mut self, tree: TreeBuilder) -> Self {
         let name = tree.name().to_owned();
         self.trees.insert(name, tree);

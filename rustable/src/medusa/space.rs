@@ -48,17 +48,26 @@ impl SpaceBuilder {
         self
     }
 
-    pub fn reads(mut self, names: Vec<&'static str>) -> Self {
+    pub fn reads<I>(mut self, names: I) -> Self
+    where
+        I: IntoIterator<Item = &'static str>,
+    {
         self.at_names[AccessType::Read as usize].extend(names);
         self
     }
 
-    pub fn writes(mut self, names: Vec<&'static str>) -> Self {
+    pub fn writes<I>(mut self, names: I) -> Self
+    where
+        I: IntoIterator<Item = &'static str>,
+    {
         self.at_names[AccessType::Write as usize].extend(names);
         self
     }
 
-    pub fn sees(mut self, names: Vec<&'static str>) -> Self {
+    pub fn sees<I>(mut self, names: I) -> Self
+    where
+        I: IntoIterator<Item = &'static str>,
+    {
         self.at_names[AccessType::See as usize].extend(names);
         self
     }
