@@ -149,7 +149,12 @@ impl NodeBuilder {
             .map(|(_, x)| x.build(def, cinfo))
             .collect::<Result<_, _>>()?;
 
-        let path_regex = Regex::new(self.path)?;
+        let path_regex = if !self.path.starts_with('^') && !self.path.ends_with('$') {
+            // match the whole path, otherwise, "sbin".is_match("bin") would return true.
+            Regex::new(&format!(r"^{}$", self.path))?
+        } else {
+            Regex::new(self.path)?
+        };
 
         // define new spaces which may not exist yet (assign an id for every new name)
         self.at_names
