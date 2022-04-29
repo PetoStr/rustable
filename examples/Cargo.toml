@@ -13,3 +13,7 @@ tokio = { version = "1", features = ["full"] }
 [[example]]
 name = "getipc"
 path = "getipc.rs"
+
+[[example]]
+name = "sshd"
+path = "sshd.rs"

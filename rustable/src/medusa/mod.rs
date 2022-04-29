@@ -4,7 +4,7 @@ pub mod attribute;
 pub use attribute::{AttributeBytes, MedusaAttribute, MedusaAttributeHeader, MedusaAttributes};
 
 pub mod config;
-pub use config::Config;
+pub use config::{Config, ConfigBuilder};
 
 mod constants;
 pub use constants::{AccessType, HandlerFlags};
