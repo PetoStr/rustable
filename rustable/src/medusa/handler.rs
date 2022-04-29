@@ -177,9 +177,7 @@ impl EventHandler {
             object: auth_data.object,
             handler_data: &self.data,
         };
-        (self.handler)(ctx, args)
-            .await
-            .unwrap_or(MedusaAnswer::Err)
+        (self.handler)(ctx, args).await.unwrap_or(MedusaAnswer::Err)
     }
 
     pub(crate) fn is_applicable(
@@ -253,7 +251,7 @@ async fn hierarchy_handler(ctx: &Context, args: HandlerArgs<'_>) -> anyhow::Resu
         if let Some(child) = node.child_by_path(&path) {
             node = child;
         } else {
-            println!("{} not covered by tree", path);
+            println!("{path} not covered by tree, parent = {}", node.path());
             return Ok(MedusaAnswer::Deny);
         }
     }
