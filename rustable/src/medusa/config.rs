@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::medusa::constants::{HandlerFlags, NODE_HIGHEST_PRIORITY, NODE_LOWEST_PRIORITY};
+use crate::medusa::constants::{HandlerFlags, NODE_HIGHEST_PRIORITY};
 use crate::medusa::error::ConfigError;
 use crate::medusa::handler::{CustomHandler, EventHandler, EventHandlerBuilder};
 use crate::medusa::space::{SpaceBuilder, SpaceDef};
@@ -241,10 +241,7 @@ impl ConfigBuilder {
 
         node.member_of_include_or_exclude(space, include);
 
-        if recursive {
-            node = node.get_or_create_child(NODE_LOWEST_PRIORITY, r".*");
-            node.member_of_include_or_exclude(space, include);
-        }
+        node.set_recursive(recursive);
 
         node
     }

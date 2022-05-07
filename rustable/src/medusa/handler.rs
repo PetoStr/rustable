@@ -246,24 +246,39 @@ async fn hierarchy_handler(ctx: &Context, args: HandlerArgs<'_>) -> anyhow::Resu
         node = config.node_by_cinfo(&cinfo).expect("node not found");
     }
 
+    let mut recursed = false;
+
     // is not root?
     if cinfo != 0 {
         if let Some(child) = node.child_by_path(&path) {
             node = child;
         } else {
-            println!("{path} not covered by tree, parent = {}", node.path());
-            return Ok(MedusaAnswer::Deny);
+            // find first recursive ancestor
+            while !node.is_recursive() {
+                match node.parent_cinfo() {
+                    Some(pcinfo) => node = config.node_by_cinfo(&pcinfo).expect("node not found"),
+                    None => {
+                        println!("{path} not covered by tree, parent = {}", node.path());
+                        return Ok(MedusaAnswer::Deny);
+                    }
+                }
+            }
+
+            recursed = true;
         }
     }
 
     println!(
-        "{}: \"{}\" -> \"{}\"",
+        "{}: \"{}\" -> \"{}\"{}",
         evtype.header.name,
         path,
-        node.path()
+        node.path(),
+        if recursed { " (recursion)" } else { "" }
     );
 
-    subject.enter_tree_with_node(ctx, &evtype, node).await;
+    subject
+        .enter_tree_with_node(ctx, &evtype, node, recursed)
+        .await;
 
     Ok(MedusaAnswer::Allow)
 }

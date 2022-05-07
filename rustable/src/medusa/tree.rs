@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::medusa::constants::{AccessType, NODE_HIGHEST_PRIORITY};
 use crate::medusa::space::{Space, SpaceDef, VirtualSpace};
 use crate::medusa::ConfigError;
@@ -10,10 +8,25 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub struct Node {
     path_regex: Regex,
+    recursive: bool,
 
     vs: VirtualSpace,
 
     children: Box<[Arc<Node>]>,
+    parent_cinfo: Option<usize>,
+}
+
+/// Implement Default to be able to create some kind of parent<->child reference "safely"...
+impl Default for Node {
+    fn default() -> Self {
+        Self {
+            path_regex: Regex::new("").unwrap(), // ...
+            recursive: false,
+            vs: VirtualSpace::default(),
+            children: Box::from([]),
+            parent_cinfo: None,
+        }
+    }
 }
 
 impl Node {
@@ -25,12 +38,20 @@ impl Node {
         self.path_regex.as_str()
     }
 
+    pub(crate) fn is_recursive(&self) -> bool {
+        self.recursive
+    }
+
     pub(crate) fn has_children(&self) -> bool {
         self.children.len() > 0
     }
 
     pub(crate) fn child_by_path(&self, path: &str) -> Option<&Arc<Node>> {
         self.children.iter().find(|x| x.path_regex.is_match(path))
+    }
+
+    pub(crate) fn parent_cinfo(&self) -> Option<usize> {
+        self.parent_cinfo
     }
 
     pub(crate) fn virtual_space(&self) -> &VirtualSpace {
@@ -61,7 +82,7 @@ impl Tree {
 #[derive(Debug, Default)]
 pub struct NodeBuilder {
     path: &'static str,
-    regex_path: &'static str,
+    recursive: bool,
 
     at_names: [HashSet<&'static str>; AccessType::Length as usize],
 
@@ -71,10 +92,6 @@ pub struct NodeBuilder {
 impl NodeBuilder {
     pub fn new() -> Self {
         Default::default()
-    }
-
-    pub fn path(&self) -> &'static str {
-        self.path
     }
 
     pub fn with_path(mut self, path: &'static str) -> Self {
@@ -88,7 +105,7 @@ impl NodeBuilder {
     }
 
     pub fn add_node(mut self, node: NodeBuilder) -> Self {
-        let path = node.path().to_owned();
+        let path = node.path.to_owned();
         self.children
             .entry(NODE_HIGHEST_PRIORITY)
             .or_default()
@@ -97,12 +114,16 @@ impl NodeBuilder {
     }
 
     pub fn add_node_with_priority(mut self, priority: u16, node: NodeBuilder) -> Self {
-        let path = node.path().to_owned();
+        let path = node.path.to_owned();
         self.children
             .entry(priority)
             .or_default()
             .insert(path, node);
         self
+    }
+
+    pub(crate) fn set_recursive(&mut self, recursive: bool) {
+        self.recursive = recursive;
     }
 
     pub(crate) fn get_or_create_child(
@@ -140,13 +161,18 @@ impl NodeBuilder {
         self,
         def: &mut SpaceDef,
         cinfo: &mut HashMap<usize, Arc<Node>>,
+        parent_cinfo: Option<usize>,
     ) -> Result<Arc<Node>, ConfigError> {
+        // a pretty expensive way to have a reference to parent before creating the node itself
+        let mut node = Arc::new(Node::default());
+        let node_cinfo = Arc::as_ptr(&node) as usize;
+
         let children = self
             .children
             .into_iter()
             .map(|(_, hmap)| hmap)
             .flatten()
-            .map(|(_, x)| x.build(def, cinfo))
+            .map(|(_, x)| x.build(def, cinfo, Some(node_cinfo)))
             .collect::<Result<_, _>>()?;
 
         let path_regex = if !self.path.starts_with('^') && !self.path.ends_with('$') {
@@ -170,13 +196,17 @@ impl NodeBuilder {
         let mut vs = VirtualSpace::new();
         vs.set_access_types(def, &spaces.try_into().unwrap());
 
-        let node = Arc::new(Node {
+        let recursive = self.recursive;
+
+        *Arc::get_mut(&mut node).unwrap() = Node {
             path_regex,
+            recursive,
             vs,
             children,
-        });
+            parent_cinfo,
+        };
 
-        cinfo.insert(Arc::as_ptr(&node) as usize, Arc::clone(&node));
+        cinfo.insert(node_cinfo, Arc::clone(&node));
 
         Ok(node)
     }
@@ -219,7 +249,10 @@ impl TreeBuilder {
     ) -> Result<Tree, ConfigError> {
         Ok(Tree {
             name: self.name,
-            root: self.root.expect("Root is missing.").build(def, cinfo)?,
+            root: self
+                .root
+                .expect("Root is missing.")
+                .build(def, cinfo, None)?,
         })
     }
 }

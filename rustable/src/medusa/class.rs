@@ -56,21 +56,40 @@ impl MedusaClass {
             .unwrap_or_else(|| panic!("primary tree `{}` not found", primary_tree));
 
         let mut node = tree.root();
+        let mut recursive_parent = if node.is_recursive() {
+            Some(node)
+        } else {
+            None
+        };
+        let mut recursed = false;
         if path != "/" {
             // skip empty string caused by leading '/'
             for part in path.split_terminator('/').skip(1) {
-                node = node.child_by_path(part).unwrap();
+                let child = node.child_by_path(part);
+                match child {
+                    Some(ch) => {
+                        if ch.is_recursive() {
+                            recursive_parent = Some(ch);
+                        }
+                        node = ch;
+                    }
+                    None => {
+                        node = recursive_parent.expect("{part} not covered by tree");
+                        recursed = true;
+                    }
+                }
             }
         }
 
         println!(
-            "{}: \"{}\" -> \"{}\"",
+            "{}: \"{}\" -> \"{}\"{}",
             evtype.header.name,
             path,
-            node.path()
+            node.path(),
+            if recursed { " (recursion)" } else { "" }
         );
 
-        self.enter_tree_with_node(ctx, evtype, node).await;
+        self.enter_tree_with_node(ctx, evtype, node, recursed).await;
     }
 
     pub async fn enter_tree_with_node(
@@ -78,6 +97,7 @@ impl MedusaClass {
         ctx: &Context,
         evtype: &MedusaEvtype,
         node: &Arc<Node>,
+        recursed: bool,
     ) {
         let _ = self.clear_object_act();
         let _ = self.clear_subject_act();
@@ -85,7 +105,7 @@ impl MedusaClass {
         let cinfo = Arc::as_ptr(node) as usize;
 
         self.set_access_types(node.virtual_space());
-        if node.has_children() && evtype.header.monitoring == Monitoring::Object {
+        if !recursed && node.has_children() && evtype.header.monitoring == Monitoring::Object {
             let _ = self.add_object_act(evtype.header.monitoring_bit as usize);
             let _ = self.add_subject_act(evtype.header.monitoring_bit as usize);
         }
