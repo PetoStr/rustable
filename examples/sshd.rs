@@ -27,7 +27,9 @@ async fn getprocess_handler(ctx: &Context, args: HandlerArgs<'_>) -> Result<Medu
             .enter_tree(ctx, &evtype, "domains", "/usr/bin/passwd")
             .await;
     } else {
-        subject.set_attribute::<u32>("med_sact", 0x3fffffff)?;
+        subject
+            .enter_tree(ctx, &evtype, "domains", "/")
+            .await;
     }
 
     subject.update(ctx).await;
@@ -61,7 +63,7 @@ fn include_passwd(config: ConfigBuilder) -> ConfigBuilder {
         .with_name("passwd")
         .with_path("domains/usr/bin/passwd")
         .reads(read_names.clone())
-        .writes(vec!["pts", "run_utmp", "var_run_tmp"])
+        .writes(["pts", "run_utmp", "var_run_tmp"])
         .sees(read_names);
 
     config
@@ -120,7 +122,11 @@ fn create_config() -> Result<Config, ConfigError> {
 
     reads.push(SpaceBuilder::new()
         .with_name("authorized-keys")
-        .with_path(r"fs/home/roderik/.ssh/authorized_keys(2?)"));
+        .with_path(r"fs/home/.*/\.ssh/authorized_keys(2?)"));
+
+    reads.push(SpaceBuilder::new()
+        .with_name("run_sshd")
+        .with_path(r"fs/run/(sshd|sshd\.pid|sshd\.init\.pid)"));
 
     reads.push(SpaceBuilder::new()
         .with_name("cgroup")
@@ -172,22 +178,31 @@ fn create_config() -> Result<Config, ConfigError> {
         .with_name("tmp_ssh")
         .with_path_recursive(r"fs/tmp/ssh-[a-zA-Z0-9]*"));
 
-    reads.push(SpaceBuilder::new()
-        .with_name("other_files")
-        .with_path_recursive("fs/"));
-
     let read_names = reads.iter().map(|x| x.name());
 
     let sshd = SpaceBuilder::new()
         .with_name("sshd")
         .with_path("domains/usr/sbin/sshd")
         .reads(read_names.clone())
-        .writes(vec!["ptmx", "pts", "btmp", "cgroup", "cgroup-systemd", "run_motd",
-                     "var_run_motd", "krb5cc", "tmp_ssh"])
+        .writes(["ptmx", "pts", "btmp", "cgroup", "cgroup-systemd", "run_motd",
+                 "var_run_motd", "run_sshd", "krb5cc", "tmp_ssh"])
         .sees(read_names)
-        .sees(vec![krb5cc.name()]);
+        .sees([krb5cc.name()]);
+
+    let all_files = SpaceBuilder::new()
+        .with_name("all_files")
+        .with_path_recursive("fs/");
+
+    let all_domains = SpaceBuilder::new()
+        .with_name("all_domains")
+        .with_path_recursive("domains/")
+        .reads(["all_files", "all_domains"])
+        .writes(["all_files", "all_domains"])
+        .sees(["all_files", "all_domains"]);
 
     config
+        .add_space(all_files)
+        .add_space(all_domains)
         .add_space(krb5cc)
         .add_space(sshd)
         .add_spaces(reads)
