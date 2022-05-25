@@ -16,7 +16,7 @@ async fn getprocess_handler(ctx: &Context, args: HandlerArgs<'_>) -> Result<Medu
     let mut subject = args.subject;
     let cmdline = subject.get_attribute::<String>("cmdline")?;
 
-    println!("getprocess.cmdline = {cmdline}");
+    println!("cmdline = {cmdline}");
 
     if cmdline.contains("/usr/sbin/sshd") {
         subject
