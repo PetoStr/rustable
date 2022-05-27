@@ -178,6 +178,24 @@ fn create_config() -> Result<Config, ConfigError> {
         .with_name("tmp_ssh")
         .with_path_recursive(r"fs/tmp/ssh-[a-zA-Z0-9]*"));
 
+    // ignoring `/** r`
+    // https://gitlab.com/apparmor/apparmor/-/blob/2a3140cb9347131d8e033a6ba633f501c19eaaef/profiles/apparmor/profiles/extras/usr.sbin.sshd#L139
+    reads.push(SpaceBuilder::new()
+        .with_name("usr_bin")
+        .with_path_recursive(r"fs/usr/bin"));
+    reads.push(SpaceBuilder::new()
+        .with_name("etc")
+        .with_path_recursive(r"fs/etc"));
+    reads.push(SpaceBuilder::new()
+        .with_name("dev_null-zero")
+        .with_path(r"fs/dev/(null|zero)"));
+    reads.push(SpaceBuilder::new()
+        .with_name("usr_lib")
+        .with_path_recursive(r"fs/usr/lib"));
+    reads.push(SpaceBuilder::new()
+        .with_name("home")
+        .with_path_recursive(r"fs/home"));
+
     let read_names = reads.iter().map(|x| x.name());
 
     let sshd = SpaceBuilder::new()
@@ -185,20 +203,26 @@ fn create_config() -> Result<Config, ConfigError> {
         .with_path("domains/usr/sbin/sshd")
         .reads(read_names.clone())
         .writes(["ptmx", "pts", "btmp", "cgroup", "cgroup-systemd", "run_motd",
-                 "var_run_motd", "run_sshd", "krb5cc", "tmp_ssh"])
-        .sees(read_names)
+                 "var_run_motd", "run_sshd", "krb5cc", "tmp_ssh", "dev_null-zero"])
+        .sees(read_names.clone())
         .sees([krb5cc.name()]);
 
     let all_files = SpaceBuilder::new()
         .with_name("all_files")
         .with_path_recursive("fs/");
 
+    let all = read_names
+        .clone()
+        .chain(["all_files", "all_domains"])
+        .chain(["sshd", "passwd", "usr_bin_passwd", "pts-passwd", "run_utmp", "var_run_utmp"])
+        .chain([krb5cc.name()]);
+
     let all_domains = SpaceBuilder::new()
         .with_name("all_domains")
         .with_path_recursive("domains/")
-        .reads(["all_files", "all_domains"])
-        .writes(["all_files", "all_domains"])
-        .sees(["all_files", "all_domains"]);
+        .reads(all.clone())
+        .writes(all.clone())
+        .sees(all.clone());
 
     config
         .add_space(all_files)
