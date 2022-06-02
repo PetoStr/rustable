@@ -17,3 +17,7 @@ path = "getipc.rs"
 [[example]]
 name = "sshd"
 path = "sshd.rs"
+
+[[example]]
+name = "mkrmdir"
+path = "mkrmdir.rs"
