@@ -251,12 +251,15 @@ async fn get_answer(ctx: Arc<Context>, auth_data: AuthRequestData) -> MedusaAnsw
     let object = &auth_data.object;
 
     let mut answer = DEFAULT_ANSWER;
-    // call only the first matching handler
     if let Some(event_handlers) = event_handlers {
         for event_handler in event_handlers {
             if event_handler.is_applicable(subject, object.as_ref()) {
-                answer = event_handler.handle(&ctx, auth_data).await;
-                break;
+                answer = event_handler.handle(&ctx, auth_data.clone()).await;
+
+                // premature exit of handlers on Deny
+                if answer == MedusaAnswer::Deny {
+                    break;
+                }
             }
         }
     }
