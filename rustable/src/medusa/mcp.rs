@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::os::unix::io::AsRawFd;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 lazy_static! {
     static ref COMMS: HashMap<Command, &'static str> = {
@@ -216,6 +217,11 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
         let attrs = self.reader.read_attributes().await?;
         for attr in attrs {
             evtype.attributes.push(attr);
+        }
+
+        if self.context.config.has_handler(&name) {
+            let mask = 1 << evtype.header.monitoring_bit;
+            self.context.config.covered_events_mask.fetch_or(mask, Ordering::SeqCst);
         }
 
         self.context.evtype_id.insert(name, evtype.header.evid);

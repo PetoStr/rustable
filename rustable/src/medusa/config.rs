@@ -7,6 +7,7 @@ use crate::medusa::space::{SpaceBuilder, SpaceDef};
 use crate::medusa::tree::{Node, NodeBuilder, Tree, TreeBuilder};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 
 #[derive(Debug)]
 pub struct Config {
@@ -16,6 +17,8 @@ pub struct Config {
     event_handlers: HashMap<String, Box<[EventHandler]>>,
     name_to_space_bit: HashMap<String, usize>,
     space_bit_to_name: HashMap<usize, String>,
+
+    pub(crate) covered_events_mask: AtomicU64,
     // TODO medusa connections, default answer
 }
 
@@ -42,6 +45,10 @@ impl Config {
 
     pub(crate) fn handlers_by_event(&self, event: &str) -> Option<&[EventHandler]> {
         self.event_handlers.get(event).map(|x| x.as_ref())
+    }
+
+    pub(crate) fn has_handler(&self, event: &str) -> bool {
+        self.event_handlers.contains_key(event)
     }
 }
 
@@ -219,6 +226,7 @@ impl ConfigBuilder {
             event_handlers,
             name_to_space_bit,
             space_bit_to_name,
+            covered_events_mask: AtomicU64::new(0),
         })
     }
 

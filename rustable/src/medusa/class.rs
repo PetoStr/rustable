@@ -5,6 +5,7 @@ use crate::medusa::{
     AttributeBytes, AttributeError, Context, MedusaAttributes, MedusaEvtype, Monitoring, Node,
 };
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::{fmt, mem};
 
 #[derive(Default, Clone)]
@@ -99,15 +100,18 @@ impl MedusaClass {
         node: &Arc<Node>,
         recursed: bool,
     ) {
-        let _ = self.clear_object_act();
-        let _ = self.clear_subject_act();
-
         let cinfo = Arc::as_ptr(node) as usize;
 
         self.set_access_types(node.virtual_space());
-        if !recursed && node.has_children() && evtype.header.monitoring == Monitoring::Object {
-            let _ = self.add_object_act(evtype.header.monitoring_bit as usize);
-            let _ = self.add_subject_act(evtype.header.monitoring_bit as usize);
+
+        let covered_events = ctx.config().covered_events_mask.load(Ordering::SeqCst);
+        let _ = self.set_attribute::<u64>(MEDUSA_OACT_ATTR_NAME, covered_events);
+        let _ = self.set_attribute::<u64>(MEDUSA_SACT_ATTR_NAME, covered_events);
+
+        // remove the monitoring bit if this is not a parent
+        if recursed || !(node.has_children() && evtype.header.monitoring == Monitoring::Object) {
+            let _ = self.remove_object_act(evtype.header.monitoring_bit as usize);
+            let _ = self.remove_subject_act(evtype.header.monitoring_bit as usize);
         }
 
         self.set_object_cinfo(cinfo).unwrap();

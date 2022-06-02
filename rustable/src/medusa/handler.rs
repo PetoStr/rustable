@@ -239,9 +239,6 @@ async fn hierarchy_handler(ctx: &Context, args: HandlerArgs<'_>) -> anyhow::Resu
         } else {
             node = config.node_by_cinfo(&cinfo).expect("node not found");
         }
-
-        let _ = subject.clear_object_act();
-        let _ = subject.clear_subject_act();
     } else {
         node = config.node_by_cinfo(&cinfo).expect("node not found");
     }
