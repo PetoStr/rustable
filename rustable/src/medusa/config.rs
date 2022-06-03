@@ -23,18 +23,24 @@ pub struct Config {
 }
 
 impl Config {
+    /// Creates new [`ConfigBuilder`].
+    ///
+    /// [`ConfigBuilder`]: struct.ConfigBuilder.html
     pub fn builder() -> ConfigBuilder {
         ConfigBuilder::new()
     }
 
+    /// Returns a tree having the given name.
     pub fn tree_by_name(&self, name: &str) -> Option<&Tree> {
         self.trees.iter().find(|x| x.name() == name)
     }
 
+    /// Returns bit of a virtual space having the given name.
     pub fn name_to_space_bit(&self, name: &str) -> Option<&usize> {
         self.name_to_space_bit.get(name)
     }
 
+    /// Returns a virtual space having the given bit.
     pub fn space_bit_to_name(&self, bit: &usize) -> Option<&String> {
         self.space_bit_to_name.get(bit)
     }
@@ -85,10 +91,14 @@ pub struct ConfigBuilder {
 }
 
 impl ConfigBuilder {
+    /// Creates new `ConfigBuilder`.
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Adds a virtual space.
+    ///
+    /// Returns `Self`.
     pub fn add_space(mut self, space: SpaceBuilder) -> Self {
         let name = space.name();
         let path = space.path();
@@ -124,6 +134,9 @@ impl ConfigBuilder {
         self
     }
 
+    /// Adds multiple virtual spaces.
+    ///
+    /// Returns `Self`.
     pub fn add_spaces<I>(mut self, spaces: I) -> Self
     where
         I: IntoIterator<Item = SpaceBuilder>,
@@ -134,12 +147,18 @@ impl ConfigBuilder {
         self
     }
 
+    /// Adds a tree.
+    ///
+    /// Returns `Self`.
     pub fn add_tree(mut self, tree: TreeBuilder) -> Self {
         let name = tree.name().to_owned();
         self.trees.insert(name, tree);
         self
     }
 
+    /// Adds a custom event handler using builder.
+    ///
+    /// Returns `Self`.
     pub fn add_event_handler(mut self, event_handler: EventHandlerBuilder) -> Self {
         let event = event_handler.event.to_string();
         self.event_handlers
@@ -149,6 +168,9 @@ impl ConfigBuilder {
         self
     }
 
+    /// Adds a hierarchy event handler for `primary_tree` tree.
+    ///
+    /// Returns `Self`.
     pub fn add_hierarchy_event_handler(
         mut self,
         event: &'static str,
@@ -168,6 +190,9 @@ impl ConfigBuilder {
         self
     }
 
+    /// Adds a custom event handler.
+    ///
+    /// Returns `Self`.
     pub fn add_custom_event_handler(mut self, custom_handler: impl CustomHandler) -> Self {
         let event_handler = EventHandlerBuilder::new().with_custom_handler(custom_handler);
 
@@ -179,6 +204,9 @@ impl ConfigBuilder {
         self
     }
 
+    /// Builds this config representation into usable form.
+    ///
+    /// Returns `Config` or `ConfigError` on error.
     pub fn build(mut self) -> Result<Config, ConfigError> {
         let mut def = SpaceDef::new();
         let mut cinfo = HashMap::new();
