@@ -4,8 +4,8 @@ use crate::medusa::space::VirtualSpace;
 use crate::medusa::{
     AttributeBytes, AttributeError, Context, MedusaAttributes, MedusaEvtype, Monitoring, Node,
 };
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::{fmt, mem};
 
 #[derive(Default, Clone)]

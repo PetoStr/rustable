@@ -6,8 +6,8 @@ use crate::medusa::handler::{CustomHandler, EventHandler, EventHandlerBuilder};
 use crate::medusa::space::{SpaceBuilder, SpaceDef};
 use crate::medusa::tree::{Node, NodeBuilder, Tree, TreeBuilder};
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Config {

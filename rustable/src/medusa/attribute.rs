@@ -98,6 +98,7 @@ impl MedusaAttribute {
     }
 }
 
+/// A type may implement this trait in order to support conversion between self and bytes.
 pub trait AttributeBytes {
     fn to_bytes(self) -> Vec<u8>;
     fn from_bytes(bytes: Vec<u8>) -> Self;
@@ -142,6 +143,7 @@ impl AttributeBytes for Vec<u8> {
     }
 }
 
+/// A container for attributes.
 #[derive(Default, Clone, Debug)]
 pub struct MedusaAttributes {
     inner: LinkedHashMap<String, MedusaAttribute>,

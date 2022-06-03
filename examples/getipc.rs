@@ -80,9 +80,9 @@ fn create_config() -> Result<Config, ConfigError> {
     let all_domains = SpaceBuilder::new()
         .with_name("all_domains")
         .with_path_recursive("domains/")
-        .reads(vec!["all_files", "all_domains", "home"])
-        .writes(vec!["all_files", "all_domains", "home"])
-        .sees(vec!["all_files", "all_domains", "home"]);
+        .reads(["all_files", "all_domains", "home"])
+        .writes(["all_files", "all_domains", "home"])
+        .sees(["all_files", "all_domains", "home"]);
 
     let home = SpaceBuilder::new()
         .with_name("home")

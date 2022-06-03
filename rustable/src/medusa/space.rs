@@ -2,6 +2,7 @@ use crate::bitmap;
 use crate::medusa::constants::AccessType;
 use std::collections::HashMap;
 
+/// Builder for virtual space.
 #[derive(Debug, Default, Clone)]
 pub struct SpaceBuilder {
     pub(crate) name: Option<&'static str>,
@@ -17,37 +18,53 @@ pub struct SpaceBuilder {
 }
 
 impl SpaceBuilder {
+    /// Creates new `SpaceBuilder`.
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Returns virtual space name.
     pub fn name(&self) -> &'static str {
         self.name.as_ref().expect("Space does not have a name.")
     }
 
+    /// Returns virtual space path.
     pub fn path(&self) -> &'static str {
         self.path.as_ref().expect("Space does not have a path.").0
     }
 
+    /// Returns whether virtual space path is recursive.
     pub fn recursive(&self) -> bool {
         self.path.as_ref().expect("Space does not have a path.").1
     }
 
+    /// Sets virtual space name.
+    ///
+    /// Returns `Self`.
     pub fn with_name(mut self, name: &'static str) -> Self {
         self.name = Some(name);
         self
     }
 
+    /// Sets virtual space path.
+    ///
+    /// Returns `Self`.
     pub fn with_path(mut self, path: &'static str) -> Self {
         self.path = Some((path, false));
         self
     }
 
+    /// Sets virtual space path recursively.
+    ///
+    /// Returns `Self`.
     pub fn with_path_recursive(mut self, path: &'static str) -> Self {
         self.path = Some((path, true));
         self
     }
 
+    /// Extends access rights for type `read`.
+    ///
+    /// Returns `Self`.
     pub fn reads<I>(mut self, names: I) -> Self
     where
         I: IntoIterator<Item = &'static str>,
@@ -56,6 +73,9 @@ impl SpaceBuilder {
         self
     }
 
+    /// Extends access rights for type `write`.
+    ///
+    /// Returns `Self`.
     pub fn writes<I>(mut self, names: I) -> Self
     where
         I: IntoIterator<Item = &'static str>,
@@ -64,6 +84,9 @@ impl SpaceBuilder {
         self
     }
 
+    /// Extends access rights for type `see`.
+    ///
+    /// Returns `Self`.
     pub fn sees<I>(mut self, names: I) -> Self
     where
         I: IntoIterator<Item = &'static str>,
@@ -72,40 +95,62 @@ impl SpaceBuilder {
         self
     }
 
-    pub fn include_space(mut self, path: &'static str) -> Self {
-        self.include_space.push(path);
+    /// Includes the provided virtual space by name.
+    ///
+    /// Returns `Self`.
+    pub fn include_space(mut self, space: &'static str) -> Self {
+        self.include_space.push(space);
         self
     }
 
-    pub fn exclude_space(mut self, path: &'static str) -> Self {
-        self.exclude_space.push(path);
+    /// Excludes the provided virtual space by name.
+    ///
+    /// Returns `Self`.
+    pub fn exclude_space(mut self, space: &'static str) -> Self {
+        self.exclude_space.push(space);
         self
     }
 
+    /// Includes the provided path.
+    ///
+    /// Returns `Self`.
     pub fn include_path(mut self, path: &'static str) -> Self {
         self.include_path.push((path, false));
         self
     }
 
+    /// Includes the provided path recursively.
+    ///
+    /// Returns `Self`.
     pub fn include_path_recursive(mut self, path: &'static str) -> Self {
         self.include_path.push((path, true));
         self
     }
 
+    /// Excludes the provided path.
+    ///
+    /// Returns `Self`.
     pub fn exclude_path(mut self, path: &'static str) -> Self {
         self.exclude_path.push((path, false));
         self
     }
 
+    /// Excludes the provided path recursively.
+    ///
+    /// Returns `Self`.
     pub fn exclude_path_recursive(mut self, path: &'static str) -> Self {
         self.exclude_path.push((path, true));
         self
     }
 }
 
+/// Virtual space reference without the need of using special symbols.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Space {
+    /// Covers all possible virtual space names.
     All,
+
+    /// Covers only one specific virtual space name.
     ByName(&'static str),
 }
 
@@ -161,12 +206,14 @@ impl SpaceDef {
     }
 }
 
+/// A set of virtual spaces for various access types. The name can be misleading.
 #[derive(Debug, Default, Clone)]
 pub struct VirtualSpace {
     access_types: [Vec<u8>; AccessType::Length as usize],
 }
 
 impl VirtualSpace {
+    /// Creates new `VirtualSpace`.
     pub fn new() -> Self {
         Default::default()
     }
@@ -181,6 +228,7 @@ impl VirtualSpace {
         }
     }
 
+    /// Returns a vector of defined `at` access types.
     pub fn to_at_bytes(&self, at: AccessType) -> Vec<u8> {
         self.access_types[at as usize].clone()
     }

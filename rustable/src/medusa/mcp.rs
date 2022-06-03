@@ -6,8 +6,8 @@ use crate::medusa::{
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::os::unix::io::AsRawFd;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 lazy_static! {
     static ref COMMS: HashMap<Command, &'static str> = {
@@ -24,6 +24,7 @@ lazy_static! {
     };
 }
 
+/// Connection to Medusa security module.
 pub struct Connection<R: Read + Unpin> {
     // TODO endian based reader
     reader: NativeByteOrderReader<R>,
@@ -31,6 +32,8 @@ pub struct Connection<R: Read + Unpin> {
 }
 
 impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
+    /// Creates new `Connection`. During this the connection with security module is also
+    /// initialized. This includes greeting and also the supported protocol version is checked.
     pub async fn new<W>(
         write_handle: W,
         read_handle: R,
@@ -67,6 +70,7 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
         Ok(Self { reader, context })
     }
 
+    /// Runs the main connection loop.
     pub async fn run(&mut self) -> Result<(), CommunicationError> {
         self.run_loop().await
     }
@@ -221,7 +225,10 @@ impl<R: Read + AsRawFd + Unpin + Send> Connection<R> {
 
         if self.context.config.has_handler(&name) {
             let mask = 1 << evtype.header.monitoring_bit;
-            self.context.config.covered_events_mask.fetch_or(mask, Ordering::SeqCst);
+            self.context
+                .config
+                .covered_events_mask
+                .fetch_or(mask, Ordering::SeqCst);
         }
 
         self.context.evtype_id.insert(name, evtype.header.evid);

@@ -5,6 +5,9 @@ use regex::Regex;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
+/// Node of structure [`Tree`].
+///
+/// [`Tree`]: struct.Tree.html
 #[derive(Debug)]
 pub struct Node {
     path_regex: Regex,
@@ -30,6 +33,9 @@ impl Default for Node {
 }
 
 impl Node {
+    /// Creates new [`NodeBuilder`].
+    ///
+    /// [`NodeBuilder`]: struct.NodeBuilder.html
     pub fn builder() -> NodeBuilder {
         NodeBuilder::new()
     }
@@ -59,6 +65,7 @@ impl Node {
     }
 }
 
+/// A tree structure that could represent, for example, a file system hierarchy.
 #[derive(Debug)]
 pub struct Tree {
     name: &'static str,
@@ -66,10 +73,14 @@ pub struct Tree {
 }
 
 impl Tree {
+    /// Creates new [`TreeBuilder`].
+    ///
+    /// [`TreeBuilder`]: struct.TreeBuilder.html
     pub fn builder() -> TreeBuilder {
         TreeBuilder::new()
     }
 
+    /// Returns the name of this tree.
     pub fn name(&self) -> &str {
         self.name
     }
@@ -79,6 +90,9 @@ impl Tree {
     }
 }
 
+/// Builder for structure [`Node`].
+///
+/// [`Node`]: struct.Node.html
 #[derive(Debug, Default)]
 pub struct NodeBuilder {
     path: &'static str,
@@ -90,20 +104,30 @@ pub struct NodeBuilder {
 }
 
 impl NodeBuilder {
+    /// Creates new `NodeBuilder`.
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Sets the covered path.
+    ///
+    /// Returns `Self`.
     pub fn with_path(mut self, path: &'static str) -> Self {
         self.path = path;
         self
     }
 
+    /// Adds a new access name `name` for given access type `at`.
+    ///
+    /// Returns `Self`.
     pub fn add_access_type(mut self, at: AccessType, name: &'static str) -> Self {
         self.at_names[at as usize].insert(name);
         self
     }
 
+    /// Adds a new node.
+    ///
+    /// Returns `Self`.
     pub fn add_node(mut self, node: NodeBuilder) -> Self {
         let path = node.path.to_owned();
         self.children
@@ -113,6 +137,9 @@ impl NodeBuilder {
         self
     }
 
+    /// Adds a new node with given priority. The lower the value, the higher the priority.
+    ///
+    /// Returns `Self`.
     pub fn add_node_with_priority(mut self, priority: u16, node: NodeBuilder) -> Self {
         let path = node.path.to_owned();
         self.children
@@ -212,6 +239,9 @@ impl NodeBuilder {
     }
 }
 
+/// Builder for structure [`Tree`].
+///
+/// [`Tree`]: struct.Tree.html
 #[derive(Default)]
 pub struct TreeBuilder {
     name: &'static str,
@@ -219,19 +249,27 @@ pub struct TreeBuilder {
 }
 
 impl TreeBuilder {
+    /// Creates new `TreeBuilder`.
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Returns the name of this tree.
     pub fn name(&self) -> &'static str {
         self.name
     }
 
+    /// Sets the tree name.
+    ///
+    /// Returns `Self`.
     pub fn with_name(mut self, name: &'static str) -> Self {
         self.name = name;
         self
     }
 
+    /// Sets the root node of this tree.
+    ///
+    /// Returns `Self`.
     pub fn set_root(mut self, root: NodeBuilder) -> Self {
         self.root = Some(root);
         self

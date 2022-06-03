@@ -27,9 +27,7 @@ async fn getprocess_handler(ctx: &Context, args: HandlerArgs<'_>) -> Result<Medu
             .enter_tree(ctx, &evtype, "domains", "/usr/bin/passwd")
             .await;
     } else {
-        subject
-            .enter_tree(ctx, &evtype, "domains", "/")
-            .await;
+        subject.enter_tree(ctx, &evtype, "domains", "/").await;
     }
 
     subject.update(ctx).await;
