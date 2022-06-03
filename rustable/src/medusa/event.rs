@@ -49,6 +49,7 @@ impl MedusaEvtypeHeader {
     }
 }
 
+/// Event, such as `getfile` or `getprocess`.
 #[derive(Default, Clone, Debug)]
 pub struct MedusaEvtype {
     pub(crate) header: MedusaEvtypeHeader,
@@ -56,10 +57,12 @@ pub struct MedusaEvtype {
 }
 
 impl MedusaEvtype {
+    /// Returns slice of bytes for attribute `attr_name`.
     pub fn get_attribute(&self, attr_name: &str) -> Result<&[u8], AttributeError> {
         self.attributes.get(attr_name)
     }
 
+    /// Returns name of this event.
     pub fn name(&self) -> &str {
         self.header.name()
     }

@@ -35,6 +35,7 @@ impl fmt::Debug for MedusaClassHeader {
     }
 }
 
+/// Entity which may represent either subject or object.
 #[derive(Default, Clone, Debug)]
 pub struct MedusaClass {
     pub(crate) header: MedusaClassHeader,
@@ -42,6 +43,7 @@ pub struct MedusaClass {
 }
 
 impl MedusaClass {
+    /// Manually enters this entity into tree.
     pub async fn enter_tree(
         &mut self,
         ctx: &Context,
@@ -93,6 +95,7 @@ impl MedusaClass {
         self.enter_tree_with_node(ctx, evtype, node, recursed).await;
     }
 
+    /// Manually enters this entity into specific node.
     pub async fn enter_tree_with_node(
         &mut self,
         ctx: &Context,
@@ -119,6 +122,7 @@ impl MedusaClass {
         self.update(ctx).await;
     }
 
+    /// Copies access types from `vs`.
     pub fn set_access_types(&mut self, vs: &VirtualSpace) {
         let _ = self.set_vs(vs.to_at_bytes(AccessType::Member));
         let _ = self.set_vs_read(vs.to_at_bytes(AccessType::Read));
@@ -126,6 +130,7 @@ impl MedusaClass {
         let _ = self.set_vs_see(vs.to_at_bytes(AccessType::See));
     }
 
+    /// Performs `update` request on this entity.
     pub async fn update(&self, ctx: &Context) -> i32 {
         let data = self.pack_attributes();
         let id = self.header.id;
@@ -135,7 +140,7 @@ impl MedusaClass {
         answer.status
     }
 
-    /// Perform fetch request. In case that the returned object has not yet been registered,
+    /// Performs `fetch` request. In case that the returned object has not yet been registered,
     /// `None` is returned.
     pub async fn fetch(&self, ctx: &Context) -> Option<MedusaClass> {
         let data = self.pack_attributes();
@@ -149,6 +154,7 @@ impl MedusaClass {
         Some(object)
     }
 
+    /// Adds virtual space.
     pub fn add_vs(&mut self, n: usize) -> Result<(), AttributeError> {
         let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME)?;
         bitmap::set_bit(vs, n);
@@ -156,6 +162,7 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Removes virtual space.
     pub fn remove_vs(&mut self, n: usize) -> Result<(), AttributeError> {
         let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME)?;
         bitmap::clear_bit(vs, n);
@@ -163,10 +170,12 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Sets virtual spaces.
     pub fn set_vs(&mut self, vs: Vec<u8>) -> Result<(), AttributeError> {
         self.attributes.set(MEDUSA_VS_ATTR_NAME, vs)
     }
 
+    /// Clears virtual spaces.
     pub fn clear_vs(&mut self) -> Result<(), AttributeError> {
         let vs = self.attributes.get_mut(MEDUSA_VS_ATTR_NAME)?;
         bitmap::clear_all(vs);
@@ -174,6 +183,7 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Adds virtual space for `read` access type.
     pub fn add_vs_read(&mut self, n: usize) -> Result<(), AttributeError> {
         let vsr = self.attributes.get_mut(MEDUSA_VSR_ATTR_NAME)?;
         bitmap::set_bit(vsr, n);
@@ -181,6 +191,7 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Removes virtual space for `read` access type.
     pub fn remove_vs_read(&mut self, n: usize) -> Result<(), AttributeError> {
         let vsr = self.attributes.get_mut(MEDUSA_VSR_ATTR_NAME)?;
         bitmap::clear_bit(vsr, n);
@@ -188,10 +199,12 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Sets virtual spaces for `read` access type.
     pub fn set_vs_read(&mut self, vs: Vec<u8>) -> Result<(), AttributeError> {
         self.attributes.set(MEDUSA_VSR_ATTR_NAME, vs)
     }
 
+    /// Clears virtual spaces for `read` access type.
     pub fn clear_vs_read(&mut self) -> Result<(), AttributeError> {
         let vsr = self.attributes.get_mut(MEDUSA_VSR_ATTR_NAME)?;
         bitmap::clear_all(vsr);
@@ -199,6 +212,7 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Adds virtual space for `write` access type.
     pub fn add_vs_write(&mut self, n: usize) -> Result<(), AttributeError> {
         let vsw = self.attributes.get_mut(MEDUSA_VSW_ATTR_NAME)?;
         bitmap::set_bit(vsw, n);
@@ -206,6 +220,7 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Removes virtual space for `write` access type.
     pub fn remove_vs_write(&mut self, n: usize) -> Result<(), AttributeError> {
         let vsw = self.attributes.get_mut(MEDUSA_VSW_ATTR_NAME)?;
         bitmap::clear_bit(vsw, n);
@@ -213,10 +228,12 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Sets virtual spaces for `write` access type.
     pub fn set_vs_write(&mut self, vs: Vec<u8>) -> Result<(), AttributeError> {
         self.attributes.set(MEDUSA_VSW_ATTR_NAME, vs)
     }
 
+    /// Clears virtual spaces for `write` access type.
     pub fn clear_vs_write(&mut self) -> Result<(), AttributeError> {
         let vsw = self.attributes.get_mut(MEDUSA_VSW_ATTR_NAME)?;
         bitmap::clear_all(vsw);
@@ -224,6 +241,7 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Adds virtual space for `see` access type.
     pub fn add_vs_see(&mut self, n: usize) -> Result<(), AttributeError> {
         let vss = self.attributes.get_mut(MEDUSA_VSS_ATTR_NAME)?;
         bitmap::set_bit(vss, n);
@@ -231,6 +249,7 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Removes virtual space for `see` access type.
     pub fn remove_vs_see(&mut self, n: usize) -> Result<(), AttributeError> {
         let vss = self.attributes.get_mut(MEDUSA_VSS_ATTR_NAME)?;
         bitmap::clear_bit(vss, n);
@@ -238,10 +257,12 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Sets virtual spaces for `see` access type.
     pub fn set_vs_see(&mut self, vs: Vec<u8>) -> Result<(), AttributeError> {
         self.attributes.set(MEDUSA_VSS_ATTR_NAME, vs)
     }
 
+    /// Clears virtual spaces for `see` access type.
     pub fn clear_vs_see(&mut self) -> Result<(), AttributeError> {
         let vss = self.attributes.get_mut(MEDUSA_VSS_ATTR_NAME)?;
         bitmap::clear_all(vss);
@@ -249,6 +270,7 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Adds object monitoring bit.
     pub fn add_object_act(&mut self, n: usize) -> Result<(), AttributeError> {
         let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME)?;
         bitmap::set_bit(oact, n);
@@ -256,6 +278,7 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Removes object monitoring bit.
     pub fn remove_object_act(&mut self, n: usize) -> Result<(), AttributeError> {
         let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME)?;
         bitmap::clear_bit(oact, n);
@@ -263,6 +286,7 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Clears object monitoring bits.
     pub fn clear_object_act(&mut self) -> Result<(), AttributeError> {
         let oact = self.attributes.get_mut(MEDUSA_OACT_ATTR_NAME)?;
         bitmap::clear_all(oact);
@@ -270,6 +294,7 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Adds subject monitoring bit.
     pub fn add_subject_act(&mut self, n: usize) -> Result<(), AttributeError> {
         let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME)?;
         bitmap::set_bit(sact, n);
@@ -277,6 +302,7 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Removes subject monitoring bit.
     pub fn remove_subject_act(&mut self, n: usize) -> Result<(), AttributeError> {
         let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME)?;
         bitmap::clear_bit(sact, n);
@@ -284,6 +310,7 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Clears subject monitoring bits.
     pub fn clear_subject_act(&mut self) -> Result<(), AttributeError> {
         let sact = self.attributes.get_mut(MEDUSA_SACT_ATTR_NAME)?;
         bitmap::clear_all(sact);
@@ -291,18 +318,22 @@ impl MedusaClass {
         Ok(())
     }
 
+    /// Sets `cinfo` attribute.
     pub fn set_object_cinfo(&mut self, cinfo: usize) -> Result<(), AttributeError> {
         self.set_attribute(MEDUSA_OCINFO_ATTR_NAME, cinfo)
     }
 
+    /// Returns content of `cinfo` attribute.
     pub fn get_object_cinfo(&self) -> Result<usize, AttributeError> {
         self.get_attribute::<usize>(MEDUSA_OCINFO_ATTR_NAME)
     }
 
+    /// Returns content of `vs` attribute.
     pub fn get_vs(&self) -> Result<&[u8], AttributeError> {
         self.attributes.get(MEDUSA_VS_ATTR_NAME)
     }
 
+    /// Sets attribute `attr_name` to value `data` of type `T`.
     pub fn set_attribute<T: AttributeBytes>(
         &mut self,
         attr_name: &str,
@@ -311,10 +342,12 @@ impl MedusaClass {
         self.attributes.set(attr_name, data.to_bytes())
     }
 
+    /// Returns value of attribute `attr_name` with type `T`.
     pub fn get_attribute<T: AttributeBytes>(&self, attr_name: &str) -> Result<T, AttributeError> {
         Ok(T::from_bytes(self.attributes.get(attr_name)?.to_vec()))
     }
 
+    /// Packs attributes into vector of bytes.
     pub fn pack_attributes(&self) -> Vec<u8> {
         let mut res = vec![0; self.header.size as usize];
         self.attributes.pack(&mut res);

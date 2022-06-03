@@ -3,6 +3,14 @@
 //!
 //! # Example
 //! ```
+//! use anyhow::Result;
+//! use rustable::medusa::{
+//!     Config, ConfigError, Connection, Context, HandlerArgs, HandlerFlags, MedusaAnswer,
+//!     SpaceBuilder,
+//! };
+//! use rustable_codegen::handler;
+//! use std::fs::OpenOptions;
+//!
 //! #[handler(subject_vs = "*", event = "getprocess", object_vs = "*")]
 //! async fn getprocess_handler(ctx: &Context, args: HandlerArgs<'_>) -> Result<MedusaAnswer> {
 //!     let evtype = args.evtype;
@@ -36,7 +44,6 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     use anyhow::Context;
 //!     let config = create_config()?;
 //!
 //!     let write_handle = OpenOptions::new()
